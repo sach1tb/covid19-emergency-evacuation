@@ -1,0 +1,2993 @@
+     1	/* library file for sd / panic					/* library file for sd / panic
+     2	   used by sd.c and sd_crunch.c 				   used by sd.c and sd_crunch.c 
+     3	   */								   */
+     4	
+     5	int MainSwitch_DEFAULT = 0; 					int MainSwitch_DEFAULT = 0; 
+     6	char *IFN_DEFAULT = "sd.par";					char *IFN_DEFAULT = "sd.par";
+     7	char *OFN_DEFAULT = "sd.dat";					char *OFN_DEFAULT = "sd.dat";
+     8	char *OF2N_DEFAULT = "sd.dat2";					char *OF2N_DEFAULT = "sd.dat2";
+     9	char *OF3N_DEFAULT = "sd.dat3"; //SB			      <
+    10	
+    11	/********  global constants for both sd.c and sd_crunch.c ***	/********  global constants for both sd.c and sd_crunch.c ***
+    12	
+    13	#include <stdio.h>						#include <stdio.h>
+    14	#include <stdlib.h>						#include <stdlib.h>
+    15	#include <string.h>						#include <string.h>
+    16	#include <math.h>						#include <math.h>
+    17	#include <sys/stat.h>						#include <sys/stat.h>
+    18	#include <unistd.h>						#include <unistd.h>
+    19	
+    20	#include "nrutil.c"						#include "nrutil.c"
+    21	#include "base.c"						#include "base.c"
+    22	#include "readpar.c"						#include "readpar.c"
+    23	
+    24	
+    25	#define SD_LIB_EXIT {_E("sd_lib.c: Exiting to system.\n");exi	#define SD_LIB_EXIT {_E("sd_lib.c: Exiting to system.\n");exi
+    26	#define MY_STRLEN 200						#define MY_STRLEN 200
+    27	float EPSILON = 1.0e-5; 					float EPSILON = 1.0e-5; 
+    28	
+    29	/* number of walls and wpoints */				/* number of walls and wpoints */
+    30	#define NW 9   							#define NW 9   
+    31	#define NWP 4						      |	#define NWP 4  
+    32	typedef struct wall { float x1, y1, x2, y2; } wall; 		typedef struct wall { float x1, y1, x2, y2; } wall; 
+    33	typedef struct wpoint { float x, y; } wpoint;			typedef struct wpoint { float x, y; } wpoint;
+    34	
+    35	/************** constants needed for sd.c only **************	/************** constants needed for sd.c only **************
+    36	
+    37	#ifdef _FLAG_SD_C_						#ifdef _FLAG_SD_C_
+    38	
+    39	#include "Xlibext.c" 						#include "Xlibext.c" 
+    40	#include "Epslib.c"						#include "Epslib.c"
+    41	char *ParticleColorName[]={"yellow", "grey"};			char *ParticleColorName[]={"yellow", "grey"};
+    42	char *SmokeColorName="grey";					char *SmokeColorName="grey";
+    43	XColor BGC_sdef,IC_sdef,PC_sdef[100],SmokeColor_sdef;		XColor BGC_sdef,IC_sdef,PC_sdef[100],SmokeColor_sdef;
+    44	int X11_WWi, X11_WHe, BGCCode, ICCode, PaCNum, *PaCCode, Smok	int X11_WWi, X11_WHe, BGCCode, ICCode, PaCNum, *PaCCode, Smok
+    45	
+    46	#endif /* _FLAG_SD_C_ */					#endif /* _FLAG_SD_C_ */
+    47	
+    48	/********** constants needed for sd_crunch.c only ***********	/********** constants needed for sd_crunch.c only ***********
+    49	
+    50	#ifdef _FLAG_SD_CRUNCH_C_					#ifdef _FLAG_SD_CRUNCH_C_
+    51	
+    52	int ii,ij,ik, RndSeed_main_num, VSmoke_main_num, RndSeed_main	int ii,ij,ik, RndSeed_main_num, VSmoke_main_num, RndSeed_main
+    53	  VSmoke_main_index,*RndSeed_main,RndSeed_main_1st, B_main_nu |	  VSmoke_main_index,*RndSeed_main,RndSeed_main_1st;
+    54	float *VSmoke_main,*B_main, ***Tleave,***Tinjured;	      |	float *VSmoke_main,***Tleave,***Tinjured;
+    55	
+    56	#endif /* _FLAG_SD_CRUNCH_C_ */					#endif /* _FLAG_SD_CRUNCH_C_ */
+    57	
+    58	/********* global parameters -- to be read from parameter fil	/********* global parameters -- to be read from parameter fil
+    59	
+    60	static int N0, FrictionSwitch, InjurySwitch, ColumnSwitch,	static int N0, FrictionSwitch, InjurySwitch, ColumnSwitch,
+    61	  X11_Margin, X11_InFW, X11_InFH, X11_TLH, X11_GrFH, X11_Righ	  X11_Margin, X11_InFW, X11_InFH, X11_TLH, X11_GrFH, X11_Righ
+    62	  EpsPicMult, Eps_iPF_first, Eps_iPF_max,			  EpsPicMult, Eps_iPF_first, Eps_iPF_max,
+    63	  SaveUN, DrawUN, Sleep, Draw, 					  SaveUN, DrawUN, Sleep, Draw, 
+    64	  RndSeed, MaxUpdNum, AyS;					  RndSeed, MaxUpdNum, AyS;
+    65	static float RoomXSize, RoomYSize, DoorWidth, WallWidth, Dmea	static float RoomXSize, RoomYSize, DoorWidth, WallWidth, Dmea
+    66	  deltaD, A, B, A_fire, B_fire, Kappa, Gamma, C_Young, R, R_f	  deltaD, A, B, A_fire, B_fire, Kappa, Gamma, C_Young, R, R_f
+    67	  GaMe, GaTh, GaCM, 						  GaMe, GaTh, GaCM, 
+    68	  SmokeStartTime, VSmoke, FCrush_over_1m, 			  SmokeStartTime, VSmoke, FCrush_over_1m, 
+    69	  ColumnCenterX, ColumnCenterY, ColumnD,			  ColumnCenterX, ColumnCenterY, ColumnD,
+    70	  X11_Magn, 							  X11_Magn, 
+    71	  EpsXS, EpsYS, EpsMinXMarg, EpsMinYMarg, EpsInFW, EpsInTH, E	  EpsXS, EpsYS, EpsMinXMarg, EpsMinYMarg, EpsInFW, EpsInTH, E
+    72	  EpsLineWidth, SaveST, DrawST, DrawDMult, 			  EpsLineWidth, SaveST, DrawST, DrawDMult, 
+    73	  JavaXS, JavaYS, JavaMinXMarg, JavaMinYMarg,			  JavaXS, JavaYS, JavaMinXMarg, JavaMinYMarg,
+    74	  JavaTStep, JavaMaxTime,					  JavaTStep, JavaMaxTime,
+    75	  MaxSimTime, Vmax, H, DefaultDeltaT, C_NS, V_ChangeLimit;	  MaxSimTime, Vmax, H, DefaultDeltaT, C_NS, V_ChangeLimit;
+    76	static char BackGroundColorName[MY_STRLEN], InfoColorName[MY_	static char BackGroundColorName[MY_STRLEN], InfoColorName[MY_
+    77	  X11_FontName[MY_STRLEN];  					  X11_FontName[MY_STRLEN];  
+    78	
+    79	
+    80	int *IPar[]={&N0, &FrictionSwitch, &InjurySwitch, &ColumnSwit	int *IPar[]={&N0, &FrictionSwitch, &InjurySwitch, &ColumnSwit
+    81		     &X11_Margin, &X11_InFW,					     &X11_Margin, &X11_InFW,
+    82		     &X11_InFH, &X11_TLH, &X11_GrFH, &X11_RightRim,		     &X11_InFH, &X11_TLH, &X11_GrFH, &X11_RightRim,
+    83		     &EpsPicMult, &Eps_iPF_first, &Eps_iPF_max, &Save		     &EpsPicMult, &Eps_iPF_first, &Eps_iPF_max, &Save
+    84		     &DrawUN, &Sleep, &Draw, 					     &DrawUN, &Sleep, &Draw, 
+    85		     &RndSeed, &MaxUpdNum, &AyS}; 				     &RndSeed, &MaxUpdNum, &AyS}; 
+    86	char *IParName[]={"N0", "FrictionSwitch", "InjurySwitch", 	char *IParName[]={"N0", "FrictionSwitch", "InjurySwitch", 
+    87			  "ColumnSwitch", "X11_Margin",					  "ColumnSwitch", "X11_Margin",
+    88			  "X11_InFW", "X11_InFH", "X11_TLH", "X11_GrF			  "X11_InFW", "X11_InFH", "X11_TLH", "X11_GrF
+    89			  "X11_RightRim", "EpsPicMult", "Eps_iPF_firs			  "X11_RightRim", "EpsPicMult", "Eps_iPF_firs
+    90			  "Eps_iPF_max", "SaveUN", "DrawUN", "Sleep",			  "Eps_iPF_max", "SaveUN", "DrawUN", "Sleep",
+    91			  "Draw", "RndSeed", "MaxUpdNum", "AyS"}; 			  "Draw", "RndSeed", "MaxUpdNum", "AyS"}; 
+    92	float *FPar[]={&RoomXSize, &RoomYSize, &DoorWidth, &WallWidth	float *FPar[]={&RoomXSize, &RoomYSize, &DoorWidth, &WallWidth
+    93		       &deltaD, &A, &B, &A_fire, &B_fire, &Kappa, &Ga		       &deltaD, &A, &B, &A_fire, &B_fire, &Kappa, &Ga
+    94		       &C_Young, &R, &R_fire, &V0, &Tau, 			       &C_Young, &R, &R_fire, &V0, &Tau, 
+    95		       &GaMe, &GaTh, &GaCM, &SmokeStartTime, &VSmoke,		       &GaMe, &GaTh, &GaCM, &SmokeStartTime, &VSmoke,
+    96		       &FCrush_over_1m, 					       &FCrush_over_1m, 
+    97		       &ColumnCenterX, &ColumnCenterY, &ColumnD,		       &ColumnCenterX, &ColumnCenterY, &ColumnD,
+    98		       &X11_Magn, &EpsXS, &EpsYS,				       &X11_Magn, &EpsXS, &EpsYS,
+    99		       &EpsMinXMarg, &EpsMinYMarg, &EpsInFW, &EpsInTH		       &EpsMinXMarg, &EpsMinYMarg, &EpsInFW, &EpsInTH
+   100		       &EpsInFH, &EpsLineWidth, &SaveST, &DrawST, 		       &EpsInFH, &EpsLineWidth, &SaveST, &DrawST, 
+   101		       &DrawDMult, 						       &DrawDMult, 
+   102		       &JavaXS, &JavaYS, &JavaMinXMarg, &JavaMinYMarg		       &JavaXS, &JavaYS, &JavaMinXMarg, &JavaMinYMarg
+   103		       &JavaTStep, &JavaMaxTime,				       &JavaTStep, &JavaMaxTime,
+   104		       &MaxSimTime, &Vmax, &H, &DefaultDeltaT,			       &MaxSimTime, &Vmax, &H, &DefaultDeltaT,
+   105		       &C_NS, &V_ChangeLimit}; 					       &C_NS, &V_ChangeLimit}; 
+   106	char *FParName[]={"RoomXSize", "RoomYSize", "DoorWidth", "Wal	char *FParName[]={"RoomXSize", "RoomYSize", "DoorWidth", "Wal
+   107		          "Dmean", "deltaD", "A", "B", "A_fire", "B_f		          "Dmean", "deltaD", "A", "B", "A_fire", "B_f
+   108			  "Kappa", "Gamma", "C_Young", 					  "Kappa", "Gamma", "C_Young", 
+   109			  "R", "R_fire", "V0", "Tau", "GaMe", "GaTh",			  "R", "R_fire", "V0", "Tau", "GaMe", "GaTh",
+   110			  "SmokeStartTime", "VSmoke", 					  "SmokeStartTime", "VSmoke", 
+   111			  "FCrush_over_1m", 						  "FCrush_over_1m", 
+   112			  "ColumnCenterX", "ColumnCenterY", "ColumnD"			  "ColumnCenterX", "ColumnCenterY", "ColumnD"
+   113			  "X11_Magn", "EpsXS", "EpsYS",					  "X11_Magn", "EpsXS", "EpsYS",
+   114			  "EpsMinXMarg", "EpsMinYMarg", "EpsInFW", "E			  "EpsMinXMarg", "EpsMinYMarg", "EpsInFW", "E
+   115			  "EpsInFH", "EpsLineWidth", "SaveST",   			  "EpsInFH", "EpsLineWidth", "SaveST",   
+   116			  "DrawST", "DrawDMult", 					  "DrawST", "DrawDMult", 
+   117			  "JavaXS", "JavaYS", "JavaMinXMarg", "JavaMi			  "JavaXS", "JavaYS", "JavaMinXMarg", "JavaMi
+   118			  "JavaTStep", "JavaMaxTime",					  "JavaTStep", "JavaMaxTime",
+   119			  "MaxSimTime", "Vmax", "H",					  "MaxSimTime", "Vmax", "H",
+   120			  "DefaultDeltaT", "C_NS", "V_ChangeLimit"}; 			  "DefaultDeltaT", "C_NS", "V_ChangeLimit"}; 
+   121	char *SPar[]={BackGroundColorName, InfoColorName, X11_FontNam	char *SPar[]={BackGroundColorName, InfoColorName, X11_FontNam
+   122	char *SParName[]={"BackGroundColorName", "InfoColorName",	char *SParName[]={"BackGroundColorName", "InfoColorName",
+   123			  "X11_FontName"};   						  "X11_FontName"};   
+   124	
+   125	
+   126	int IParNum = sizeof(IPar)/sizeof(int*),			int IParNum = sizeof(IPar)/sizeof(int*),
+   127	    FParNum = sizeof(FPar)/sizeof(float*),			    FParNum = sizeof(FPar)/sizeof(float*),
+   128	    SParNum = sizeof(SPar)/sizeof(char*);			    SParNum = sizeof(SPar)/sizeof(char*);
+   129	
+   130	/******* global variables needed both for sd.c and sd_crunch.	/******* global variables needed both for sd.c and sd_crunch.
+   131	
+   132	int MainSwitch, UpdNum, N, GX, GY, G, Mb, Me, *BIndBd, *BInd,	int MainSwitch, UpdNum, N, GX, GY, G, Mb, Me, *BIndBd, *BInd,
+   133	  GaussFlag, NInRoom, *Injured, *IDs, NInjured, Eps_iPF, Java |	  GaussFlag, NInRoom, *Injured, NInjured, Eps_iPF, JavaXMarg,
+   134	  JavaYMarg, JavaImInd, JavaNTStep, 			      |	  JavaYMarg, JavaImInd, JavaNTStep,
+   135	  **JavaXlo,**JavaXhi,**JavaYlo,**JavaYhi,**JavaC,**JavaD;	  **JavaXlo,**JavaXhi,**JavaYlo,**JavaYhi,**JavaC,**JavaD;
+   136	float *SimTime, XS, YS, *D, *Phi, *X, *Y, *Xprev, *Yprev, *V,	float *SimTime, XS, YS, *D, *Phi, *X, *Y, *Xprev, *Yprev, *V,
+   137	  *VY, *E, *Vdir, GaussSet1, GaussSet2, *V0of, EpsXMarg, EpsY	  *VY, *E, *Vdir, GaussSet1, GaussSet2, *V0of, EpsXMarg, EpsY
+   138	  EpsMagn, JavaMagn; 						  EpsMagn, JavaMagn; 
+   139	char IFN[MY_STRLEN], OFN[MY_STRLEN], OF2N[MY_STRLEN], OF3N[MY |	char IFN[MY_STRLEN], OFN[MY_STRLEN], OF2N[MY_STRLEN];
+   140	FILE *OFP,*OF2P, *OF3P;					      |	FILE *OFP,*OF2P;
+   141	wall *W;							wall *W;
+   142	wpoint *WP;							wpoint *WP;
+   143	
+   144	struct stat IFStatBuf;						struct stat IFStatBuf;
+   145	long int IFModTime;						long int IFModTime;
+   146	
+   147	/* MainSwitch (see in sd.c)					/* MainSwitch (see in sd.c)
+   148	   UpdNum     index of present update				   UpdNum     index of present update
+   149	   N          number of particles				   N          number of particles
+   150	   IFN, IFP   input file name, input file pointer		   IFN, IFP   input file name, input file pointer
+   151	   IFStatBuf  input file status buffer				   IFStatBuf  input file status buffer
+   152	   IFModTime  modification time of input file			   IFModTime  modification time of input file
+   153	   X11_WWi/X11_WHe   						   X11_WWi/X11_WHe   
+   154	              window width/height				              window width/height
+   155	   SimTime[n]    time after the nth update (SimTime[0] = 0.0)	   SimTime[n]    time after the nth update (SimTime[0] = 0.0)
+   156	
+   157	   X[i]       current coordinate of particle i			   X[i]       current coordinate of particle i
+   158	   Xprev[i]   previous coordinate				   Xprev[i]   previous coordinate
+   159	   VX[i]      current velocity component of particle i		   VX[i]      current velocity component of particle i
+   160	   V[i]       magnitude of current velocity of particle i	   V[i]       magnitude of current velocity of particle i
+   161	   Phi[i]     preferred direction of particle i			   Phi[i]     preferred direction of particle i
+   162	   Vdir[i]    direction of particle i's velocity		   Vdir[i]    direction of particle i's velocity
+   163	   V0of[i]    preferred magnitude of velocity of particle i	   V0of[i]    preferred magnitude of velocity of particle i
+   164	
+   165	   E[n]       is the efficiency at update step no. n		   E[n]       is the efficiency at update step no. n
+   166	   Mb/Me      mem.alloc. begin/end 				   Mb/Me      mem.alloc. begin/end 
+   167	              ie. limits of current time window 		              ie. limits of current time window 
+   168		      (see explanation of AyS in sd.par)			      (see explanation of AyS in sd.par)
+   169	   XS,YS      size of field					   XS,YS      size of field
+   170	   GaussFlag,GaussSet1,GaussSet2 				   GaussFlag,GaussSet1,GaussSet2 
+   171	              are used by the random number generator		              are used by the random number generator
+   172	   NInRoom    number of particles in room			   NInRoom    number of particles in room
+   173	   Injured[i] =1, if pedestrian i is injured			   Injured[i] =1, if pedestrian i is injured
+   174	              =0, if not					              =0, if not
+   175	   IDs[i] = i at the beginning and updated to *n -1 as i is r <
+   176	              stores the id of the agent who is being used at <
+   177	   NInjured   number of injured	  				   NInjured   number of injured	  
+   178	   EpsXMarg   eps x margin					   EpsXMarg   eps x margin
+   179	   EpsMagn    magnification of eps image (determined from wid	   EpsMagn    magnification of eps image (determined from wid
+   180	              margins)						              margins)
+   181	   Eps_iPF    index of eps picture file				   Eps_iPF    index of eps picture file
+   182	
+   183	   JavaMagn   magnification for java images			   JavaMagn   magnification for java images
+   184	   JavaXMarg  x margin						   JavaXMarg  x margin
+   185	   JavaImInd  current index of image				   JavaImInd  current index of image
+   186	   JavaNTStep number of time steps				   JavaNTStep number of time steps
+   187	   JavaXlo[n][i] + 256*JavaXhi[n][i] 				   JavaXlo[n][i] + 256*JavaXhi[n][i] 
+   188	              is the x coordinate of particle n at time step 	              is the x coordinate of particle n at time step 
+   189	   JavaYlo[n][i] + 256*JavaYhi[n][i] 				   JavaYlo[n][i] + 256*JavaYhi[n][i] 
+   190	              is the y coordinate of particle n at time step 	              is the y coordinate of particle n at time step 
+   191	   JavaC[n][i] the color code of particle n at time step i  	   JavaC[n][i] the color code of particle n at time step i  
+   192	   JavaD[n][i] the diameter of particle n at time step i  	   JavaD[n][i] the diameter of particle n at time step i  
+   193	   								   
+   194	
+   195	
+   196	BOOK-KEEPING OF PARTICLES:					BOOK-KEEPING OF PARTICLES:
+   197	  GX*GY blocks (all same size)					  GX*GY blocks (all same size)
+   198	  the size of a block should be: not less than R, i.e.		  the size of a block should be: not less than R, i.e.
+   199	  GX = (int)floor(XS/R) i.e. R <= XS/GX				  GX = (int)floor(XS/R) i.e. R <= XS/GX
+   200	  indexed with 0, 1, ... , G^2 - 1, where G = max(GX,GY)	  indexed with 0, 1, ... , G^2 - 1, where G = max(GX,GY)
+   201	  block indices of particles stored in BIndBd & BInd		  block indices of particles stored in BIndBd & BInd
+   202		     								     
+   203	  BIndBd[n] (Block + Index + Board) 				  BIndBd[n] (Block + Index + Board) 
+   204	             = 0,1,...,N-1: the number of the nth block's fir	             = 0,1,...,N-1: the number of the nth block's fir
+   205		     = -1: there's no particle in the nth block			     = -1: there's no particle in the nth block
+   206	  BInd[i]   = 0,1,...,N-1: the next particle in the block of 	  BInd[i]   = 0,1,...,N-1: the next particle in the block of 
+   207	            = -1: there are no more particles in this block 	            = -1: there are no more particles in this block 
+   208		    */								    */
+   209	
+   210	/*====== global variables needed only for sd.c =========*/	/*====== global variables needed only for sd.c =========*/
+   211	
+   212	#ifdef _FLAG_SD_C_						#ifdef _FLAG_SD_C_
+   213	float FW_x;							float FW_x;
+   214	#endif /* _FLAG_SD_C_ */					#endif /* _FLAG_SD_C_ */
+   215	
+   216	/* FW_x     x component of force exerted on walls left and ri	/* FW_x     x component of force exerted on walls left and ri
+   217	            from exit  						            from exit  
+   218	*/   								*/   
+   219	
+   220	/***************** prototypes **********************/		/***************** prototypes **********************/
+   221	
+   222	/* functions needed in all cases */				/* functions needed in all cases */
+   223	
+   224	void WallParticleRelation(int iw, int i, float *tr, int *can_	void WallParticleRelation(int iw, int i, float *tr, int *can_
+   225	void WallPsychForce(int iw, int i, float r, float *fx, float 	void WallPsychForce(int iw, int i, float r, float *fx, float 
+   226	void WallYoungForce(int iw, int i, float r, float *fx, float 	void WallYoungForce(int iw, int i, float r, float *fx, float 
+   227	void WallTangForce_FS0(int iw, int i, float *fx, float *fy);	void WallTangForce_FS0(int iw, int i, float *fx, float *fy);
+   228	void WallTangForce_FS1(int iw, int i, float r, float *fx, flo	void WallTangForce_FS1(int iw, int i, float r, float *fx, flo
+   229	
+   230	void WPointParticleRelation(int iwp, int i, float *r, int *ca	void WPointParticleRelation(int iwp, int i, float *r, int *ca
+   231	void WPointPsychForce(int iwp, int i, float r, float *fx, flo	void WPointPsychForce(int iwp, int i, float r, float *fx, flo
+   232	void WPointYoungForce(int iwp, int i, float r, float *fx, flo	void WPointYoungForce(int iwp, int i, float r, float *fx, flo
+   233	void WPointTangForce_FS0(int iwp, int i, float r, float *fx, 	void WPointTangForce_FS0(int iwp, int i, float r, float *fx, 
+   234	void WPointTangForce_FS1(int iwp, int i, float r, float *fx, 	void WPointTangForce_FS1(int iwp, int i, float r, float *fx, 
+   235	
+   236	void PP_PsychForce(int i1, int i2, float r, float *fx, float 	void PP_PsychForce(int i1, int i2, float r, float *fx, float 
+   237	void PP_YoungForce(int i1, int i2, float r, float *fx, float 	void PP_YoungForce(int i1, int i2, float r, float *fx, float 
+   238	void PP_TangForce_FS0(int i1, int i2, float r, float *fx, flo	void PP_TangForce_FS0(int i1, int i2, float r, float *fx, flo
+   239	void PP_TangForce_FS1(int i1, int i2, float r, float *fx, flo	void PP_TangForce_FS1(int i1, int i2, float r, float *fx, flo
+   240	
+   241	float DirectionOfExit( int i );					float DirectionOfExit( int i );
+   242	void RemoveParticle( int *n, int i );				void RemoveParticle( int *n, int i );
+   243	void EulTStep( float *tstep, float f ); 			void EulTStep( float *tstep, float f ); 
+   244	
+   245	
+   246	void Start_Bare( int narg, char *argstr[] );			void Start_Bare( int narg, char *argstr[] );
+   247	void Init_Bare( char *init_switch );				void Init_Bare( char *init_switch );
+   248	void Upd();							void Upd();
+   249	float GaussRand( float gmean, float gtheta, float gcutmult );	float GaussRand( float gmean, float gtheta, float gcutmult );
+   250	float EMean( char* sw, int cnfreq, float stfreq );		float EMean( char* sw, int cnfreq, float stfreq );
+   251	
+   252	
+   253	
+   254	/* functions needed only for sd.c */				/* functions needed only for sd.c */
+   255	#ifdef _FLAG_SD_C_ 						#ifdef _FLAG_SD_C_ 
+   256	
+   257	void Start_Demo( int narg, char *argstr[] );			void Start_Demo( int narg, char *argstr[] );
+   258	void Init_Demo();						void Init_Demo();
+   259	void X11_init();						void X11_init();
+   260	void Eps_init();						void Eps_init();
+   261	void Java_init();						void Java_init();
+   262	void Pic();							void Pic();
+   263	void X11_Pic();							void X11_Pic();
+   264	void EpsDrawParticle( FILE* fp, int i );			void EpsDrawParticle( FILE* fp, int i );
+   265	void Eps_Pic();							void Eps_Pic();
+   266	void XDrawParticle( int i, int leftxmargin, int upymargin, fl	void XDrawParticle( int i, int leftxmargin, int upymargin, fl
+   267	void Save_Demo();						void Save_Demo();
+   268	void Save_Java_in_Loop();					void Save_Java_in_Loop();
+   269	void Save_Java_after_Loop();					void Save_Java_after_Loop();
+   270	void Shutdown_Demo();						void Shutdown_Demo();
+   271	void ReInit();							void ReInit();
+   272	
+   273	#endif /* _FLAG_SD_C_ */					#endif /* _FLAG_SD_C_ */
+   274	
+   275	
+   276	
+   277	/* functions needed only for sd_crunch.c */			/* functions needed only for sd_crunch.c */
+   278	#ifdef _FLAG_SD_CRUNCH_C_					#ifdef _FLAG_SD_CRUNCH_C_
+   279	
+   280	void Start_Crunch( int narg, char *argstr[] );			void Start_Crunch( int narg, char *argstr[] );
+   281	void Init_Crunch();						void Init_Crunch();
+   282	void Save_Crunch_InLoop();					void Save_Crunch_InLoop();
+   283	void Save_Crunch_AfterLoop();					void Save_Crunch_AfterLoop();
+   284	void Clean_Crunch_AfterLoop();					void Clean_Crunch_AfterLoop();
+   285	void Save_Crunch_AtEnd();					void Save_Crunch_AtEnd();
+   286	
+   287	#endif /* _FLAG_SD_CRUNCH_C_ */					#endif /* _FLAG_SD_CRUNCH_C_ */
+   288	
+   289	/********************* definitions *****************/		/********************* definitions *****************/
+   290	
+   291	void WallParticleRelation(int iw, int i, float *r, int *can_s	void WallParticleRelation(int iw, int i, float *r, int *can_s
+   292	  /* can_see: whether partice i is within the range of wall i	  /* can_see: whether partice i is within the range of wall i
+   293	     r: distance */						     r: distance */
+   294	
+   295	
+   296	  switch(iw){							  switch(iw){
+   297	  case 0:{ *r = Y[i];           break; }			  case 0:{ *r = Y[i];           break; }
+   298	  case 1:{ *r = WP[0].x-X[i];   break; }			  case 1:{ *r = WP[0].x-X[i];   break; }
+   299	  case 2:{ *r = Y[i]-WP[0].y;   break; }			  case 2:{ *r = Y[i]-WP[0].y;   break; }
+   300	  case 3:{ *r = X[i]-WP[1].x;   break; }			  case 3:{ *r = X[i]-WP[1].x;   break; }
+   301	  case 4:{ *r = RoomYSize-Y[i]; break; }			  case 4:{ *r = RoomYSize-Y[i]; break; }
+   302	  case 5:{ *r = X[i]-WP[2].x;   break; }			  case 5:{ *r = X[i]-WP[2].x;   break; }
+   303	  case 6:{ *r = WP[2].y-Y[i];   break; }			  case 6:{ *r = WP[2].y-Y[i];   break; }
+   304	  case 7:{ *r = WP[3].x-X[i];   break; }			  case 7:{ *r = WP[3].x-X[i];   break; }
+   305	  case 8:{ *r = X[i];           break; }			  case 8:{ *r = X[i];           break; }
+   306	  }								  }
+   307	
+   308	
+   309	  switch(iw){							  switch(iw){
+   310	  case 0: {   							  case 0: {   
+   311	      if(Y[i]<=R){ *can_see=1; } 				      if(Y[i]<=R){ *can_see=1; } 
+   312	      else{ *can_see=0; }    					      else{ *can_see=0; }    
+   313	      break;  							      break;  
+   314	  }								  }
+   315	  case 1: {							  case 1: {
+   316	      if((X[i]>=WP[0].x-R)&&(X[i]<=WP[0].x)&&(Y[i]<=WP[0].y))	      if((X[i]>=WP[0].x-R)&&(X[i]<=WP[0].x)&&(Y[i]<=WP[0].y))
+   317	      else{ *can_see=0; }					      else{ *can_see=0; }
+   318	      break;							      break;
+   319	  }								  }
+   320	  case 2: {							  case 2: {
+   321	      if((X[i]>=WP[0].x)&&(X[i]<=WP[1].x)&&(Y[i]<=WP[0].y+R))	      if((X[i]>=WP[0].x)&&(X[i]<=WP[1].x)&&(Y[i]<=WP[0].y+R))
+   322	      else{ *can_see=0; }					      else{ *can_see=0; }
+   323	      break;							      break;
+   324	  }								  }
+   325	  case 3:{							  case 3:{
+   326	      if((X[i]>=WP[1].x)&&(X[i]<=WP[1].x+R)&&(Y[i]<=WP[1].y))	      if((X[i]>=WP[1].x)&&(X[i]<=WP[1].x+R)&&(Y[i]<=WP[1].y))
+   327	      else{ *can_see=0; }					      else{ *can_see=0; }
+   328	      break;							      break;
+   329	  }								  }
+   330	  case 4:{							  case 4:{
+   331	      if(Y[i]>=RoomYSize-R){ *can_see=1; }			      if(Y[i]>=RoomYSize-R){ *can_see=1; }
+   332	      else{ *can_see=0; }					      else{ *can_see=0; }
+   333	      break;							      break;
+   334	  }								  }
+   335	  case 5:{							  case 5:{
+   336	      if((X[i]>=WP[2].x)&&(X[i]<=WP[2].x+R)&&(Y[i]>=WP[2].y))	      if((X[i]>=WP[2].x)&&(X[i]<=WP[2].x+R)&&(Y[i]>=WP[2].y))
+   337	      else{ *can_see=0; }					      else{ *can_see=0; }
+   338	      break;							      break;
+   339	  }								  }
+   340	  case 6:{							  case 6:{
+   341	      if((X[i]>=WP[3].x)&&(X[i]<=WP[2].x)&&(Y[i]>=WP[2].y-R))	      if((X[i]>=WP[3].x)&&(X[i]<=WP[2].x)&&(Y[i]>=WP[2].y-R))
+   342	      else{ *can_see=0; }					      else{ *can_see=0; }
+   343	      break;    						      break;    
+   344	  }								  }
+   345	  case 7:{							  case 7:{
+   346	      if((X[i]<=WP[3].x)&&(X[i]>=WP[3].x-R)&&(Y[i]>=WP[3].y))	      if((X[i]<=WP[3].x)&&(X[i]>=WP[3].x-R)&&(Y[i]>=WP[3].y))
+   347	      else{ *can_see=0; }					      else{ *can_see=0; }
+   348	      break;    						      break;    
+   349	  }								  }
+   350	  case 8:{							  case 8:{
+   351	      if(X[i]<=R){ *can_see=1; }				      if(X[i]<=R){ *can_see=1; }
+   352	      else{ *can_see=0; }					      else{ *can_see=0; }
+   353	      break;    						      break;    
+   354	  }								  }
+   355	  }								  }
+   356	}								}
+   357	
+   358	/*------------------------------*/				/*------------------------------*/
+   359	
+   360	void WallPsychForce(int iw, int i, float r, float *fx, float 	void WallPsychForce(int iw, int i, float r, float *fx, float 
+   361	
+   362	#define tmp_f (A*exp(-(r-0.5*D[i])/B))				#define tmp_f (A*exp(-(r-0.5*D[i])/B))
+   363	//#define tmp_f (25*exp(-(r-0.5*D[i])/0.08)) // SB because no <
+   364	
+   365	  switch(iw){							  switch(iw){
+   366	  case 0:{ *fx = 0.0;     *fy = tmp_f;   break; }		  case 0:{ *fx = 0.0;     *fy = tmp_f;   break; }
+   367	  case 1:{ *fx = - tmp_f; *fy = 0.0;     break; }		  case 1:{ *fx = - tmp_f; *fy = 0.0;     break; }
+   368	  case 2:{ *fx = 0.0;     *fy = tmp_f;   break; }		  case 2:{ *fx = 0.0;     *fy = tmp_f;   break; }
+   369	  case 3:{ *fx = tmp_f;   *fy = 0.0;     break; }		  case 3:{ *fx = tmp_f;   *fy = 0.0;     break; }
+   370	  case 4:{ *fx = 0.0;     *fy = - tmp_f; break; }		  case 4:{ *fx = 0.0;     *fy = - tmp_f; break; }
+   371	  case 5:{ *fx = tmp_f;   *fy = 0.0;     break; } 		  case 5:{ *fx = tmp_f;   *fy = 0.0;     break; } 
+   372	  case 6:{ *fx = 0.0;     *fy = - tmp_f; break; }		  case 6:{ *fx = 0.0;     *fy = - tmp_f; break; }
+   373	  case 7:{ *fx = - tmp_f; *fy = 0.0;     break; }		  case 7:{ *fx = - tmp_f; *fy = 0.0;     break; }
+   374	  case 8:{ *fx = tmp_f;   *fy = 0.0;     break; }		  case 8:{ *fx = tmp_f;   *fy = 0.0;     break; }
+   375	  }								  }
+   376	
+   377	#undef tmp_f							#undef tmp_f
+   378	}								}
+   379	
+   380	/*------------------------------*/				/*------------------------------*/
+   381	
+   382	void WallYoungForce(int iw, int i, float r, float *fx, float 	void WallYoungForce(int iw, int i, float r, float *fx, float 
+   383	
+   384	#define tmp_f (2.0*C_Young*(0.5*D[i]-r))			#define tmp_f (2.0*C_Young*(0.5*D[i]-r))
+   385	
+   386	  switch(iw){							  switch(iw){
+   387	  case 0:{ *fx = 0.0;     *fy = tmp_f;   break; }		  case 0:{ *fx = 0.0;     *fy = tmp_f;   break; }
+   388	  case 1:{ *fx = - tmp_f; *fy = 0.0;     break; }		  case 1:{ *fx = - tmp_f; *fy = 0.0;     break; }
+   389	  case 2:{ *fx = 0.0;     *fy = tmp_f;   break; }		  case 2:{ *fx = 0.0;     *fy = tmp_f;   break; }
+   390	  case 3:{ *fx = tmp_f;   *fy = 0.0;     break; }		  case 3:{ *fx = tmp_f;   *fy = 0.0;     break; }
+   391	  case 4:{ *fx = 0.0;     *fy = - tmp_f; break; }		  case 4:{ *fx = 0.0;     *fy = - tmp_f; break; }
+   392	  case 5:{ *fx = tmp_f;   *fy = 0.0;     break; } 		  case 5:{ *fx = tmp_f;   *fy = 0.0;     break; } 
+   393	  case 6:{ *fx = 0.0;     *fy = - tmp_f; break; }		  case 6:{ *fx = 0.0;     *fy = - tmp_f; break; }
+   394	  case 7:{ *fx = - tmp_f; *fy = 0.0;     break; }		  case 7:{ *fx = - tmp_f; *fy = 0.0;     break; }
+   395	  case 8:{ *fx = tmp_f;   *fy = 0.0;     break; }		  case 8:{ *fx = tmp_f;   *fy = 0.0;     break; }
+   396	  }								  }
+   397	
+   398	#undef tmp_f							#undef tmp_f
+   399	}								}
+   400	
+   401	/*------------------------------*/				/*------------------------------*/
+   402	
+   403	void WallTangForce_FS0(int iw, int i, float *fx, float *fy){	void WallTangForce_FS0(int iw, int i, float *fx, float *fy){
+   404	
+   405	  switch(iw){							  switch(iw){
+   406	  case 0: case 2: case 4: case 6: { 				  case 0: case 2: case 4: case 6: { 
+   407	      *fx = -Gamma*VX[i]; 					      *fx = -Gamma*VX[i]; 
+   408	      *fy = 0.0;          					      *fy = 0.0;          
+   409	      break; 							      break; 
+   410	  }								  }
+   411	  case 1: case 3: case 5: case 7: case 8: { 			  case 1: case 3: case 5: case 7: case 8: { 
+   412	      *fx = 0.0;          					      *fx = 0.0;          
+   413	      *fy = -Gamma*VY[i]; 					      *fy = -Gamma*VY[i]; 
+   414	      break; 							      break; 
+   415	  }								  }
+   416	  }								  }
+   417	}								}
+   418	
+   419	/*------------------------------*/				/*------------------------------*/
+   420	
+   421	void WallTangForce_FS1( int iw, int i, float r, float *fx, fl	void WallTangForce_FS1( int iw, int i, float r, float *fx, fl
+   422	
+   423	#define tmp_delta_r (0.5*D[i]-r)				#define tmp_delta_r (0.5*D[i]-r)
+   424	
+   425	  /* friction forces */						  /* friction forces */
+   426	  switch(iw){							  switch(iw){
+   427	  case 0: case 2: case 4: case 6: { 				  case 0: case 2: case 4: case 6: { 
+   428	      *fx = -Kappa*tmp_delta_r*VX[i]; 				      *fx = -Kappa*tmp_delta_r*VX[i]; 
+   429	      *fy = 0.0;          					      *fy = 0.0;          
+   430	      break; 							      break; 
+   431	  }								  }
+   432	  case 1: case 3: case 5: case 7: case 8: { 			  case 1: case 3: case 5: case 7: case 8: { 
+   433	      *fx = 0.0;          					      *fx = 0.0;          
+   434	      *fy = -Kappa*tmp_delta_r*VY[i]; 				      *fy = -Kappa*tmp_delta_r*VY[i]; 
+   435	      break; 							      break; 
+   436	  }								  }
+   437	  }								  }
+   438	
+   439	#undef tmp_delta_r						#undef tmp_delta_r
+   440	}								}
+   441	
+   442	/*------------------------------------*/			/*------------------------------------*/
+   443	
+   444	void WPointParticleRelation(int iwp, int i, float *r, int *ca	void WPointParticleRelation(int iwp, int i, float *r, int *ca
+   445	  /* can_see: whether partice i is within the range of wpoint	  /* can_see: whether partice i is within the range of wpoint
+   446	     r: distance */						     r: distance */
+   447	  								  
+   448	  *r = sqrt(SQR(WP[iwp].x-X[i])+SQR(WP[iwp].y-Y[i]));		  *r = sqrt(SQR(WP[iwp].x-X[i])+SQR(WP[iwp].y-Y[i]));
+   449	
+   450	  switch(iwp){							  switch(iwp){
+   451	  case 0:{							  case 0:{
+   452	    if((X[i]<=WP[0].x)&&(Y[i]>=WP[0].y)){ *can_see=1; }		    if((X[i]<=WP[0].x)&&(Y[i]>=WP[0].y)){ *can_see=1; }
+   453	    else{ *can_see=0; }						    else{ *can_see=0; }
+   454	    break;							    break;
+   455	  }								  }
+   456	  case 1:{							  case 1:{
+   457	    if((X[i]>=WP[1].x)&&(Y[i]>=WP[1].y)){ *can_see=1; }		    if((X[i]>=WP[1].x)&&(Y[i]>=WP[1].y)){ *can_see=1; }
+   458	    else{ *can_see=0; }						    else{ *can_see=0; }
+   459	    break;							    break;
+   460	  }								  }
+   461	  case 2:{							  case 2:{
+   462	    if((X[i]>=WP[2].x)&&(Y[i]<=WP[2].y)){ *can_see=1; }		    if((X[i]>=WP[2].x)&&(Y[i]<=WP[2].y)){ *can_see=1; }
+   463	    else{ *can_see=0; }						    else{ *can_see=0; }
+   464	    break;							    break;
+   465	  }								  }
+   466	  case 3:{							  case 3:{
+   467	    if((X[i]<=WP[3].x)&&(Y[i]<=WP[3].y)){ *can_see=1; }		    if((X[i]<=WP[3].x)&&(Y[i]<=WP[3].y)){ *can_see=1; }
+   468	    else{ *can_see=0; }						    else{ *can_see=0; }
+   469	    break;							    break;
+   470	  }								  }
+   471	  }								  }
+   472	}								}
+   473	
+   474	/*------------------------------*/				/*------------------------------*/
+   475	
+   476	void WPointPsychForce(int iwp, int i, float r, float *fx, flo	void WPointPsychForce(int iwp, int i, float r, float *fx, flo
+   477	  /* exerted by wpoint iwp on particle i */			  /* exerted by wpoint iwp on particle i */
+   478	  								  
+   479	#define tmp_f_over_r (A*exp(-(r-0.5*D[i])/B)/r)			#define tmp_f_over_r (A*exp(-(r-0.5*D[i])/B)/r)
+   480	
+   481	  *fx = (X[i]-WP[iwp].x) * tmp_f_over_r;			  *fx = (X[i]-WP[iwp].x) * tmp_f_over_r;
+   482	  *fy = (Y[i]-WP[iwp].y) * tmp_f_over_r;			  *fy = (Y[i]-WP[iwp].y) * tmp_f_over_r;
+   483	
+   484	#undef tmp_f_over_r						#undef tmp_f_over_r
+   485	}								}
+   486	
+   487	/*------------------------------*/				/*------------------------------*/
+   488	
+   489	void WPointYoungForce(int iwp, int i, float r, float *fx, flo	void WPointYoungForce(int iwp, int i, float r, float *fx, flo
+   490	  /* exerted by wpoint iwp on particle i */			  /* exerted by wpoint iwp on particle i */
+   491	  								  
+   492	  float rx,ry;							  float rx,ry;
+   493	
+   494	#define tmp_f_over_r ( 2.0*C_Young*(0.5*D[i]-r) / r)		#define tmp_f_over_r ( 2.0*C_Young*(0.5*D[i]-r) / r)
+   495	
+   496	  rx=WP[iwp].x-X[i];						  rx=WP[iwp].x-X[i];
+   497	  ry=WP[iwp].y-Y[i];						  ry=WP[iwp].y-Y[i];
+   498	  *fx = - rx * tmp_f_over_r;					  *fx = - rx * tmp_f_over_r;
+   499	  *fy = - ry * tmp_f_over_r;					  *fy = - ry * tmp_f_over_r;
+   500	
+   501	#undef tmp_f_over_r						#undef tmp_f_over_r
+   502	}								}
+   503	
+   504	/*------------------------------*/				/*------------------------------*/
+   505	
+   506	void WPointTangForce_FS0(int iwp, int i, float r, float *fx, 	void WPointTangForce_FS0(int iwp, int i, float r, float *fx, 
+   507	  /* exerted by wpoint iwp on particle i */			  /* exerted by wpoint iwp on particle i */
+   508	
+   509	  float rx,ry,scal_prod_over_rsqr;				  float rx,ry,scal_prod_over_rsqr;
+   510	
+   511	  rx = X[i]-WP[iwp].x;						  rx = X[i]-WP[iwp].x;
+   512	  ry = Y[i]-WP[iwp].y;						  ry = Y[i]-WP[iwp].y;
+   513	  scal_prod_over_rsqr = (ry*VX[i] - rx*VY[i]) / SQR(r); 	  scal_prod_over_rsqr = (ry*VX[i] - rx*VY[i]) / SQR(r); 
+   514	  *fx = -Gamma * (   ry * scal_prod_over_rsqr );		  *fx = -Gamma * (   ry * scal_prod_over_rsqr );
+   515	  *fy = -Gamma * ( - rx * scal_prod_over_rsqr );		  *fy = -Gamma * ( - rx * scal_prod_over_rsqr );
+   516	}								}
+   517	
+   518	/*------------------------------*/				/*------------------------------*/
+   519	
+   520	void WPointTangForce_FS1(int iwp, int i, float r, float *fx, 	void WPointTangForce_FS1(int iwp, int i, float r, float *fx, 
+   521	  /* exerted by wpoint iwp on particle i */			  /* exerted by wpoint iwp on particle i */
+   522	
+   523	  float rx,ry,scal_prod_over_rsqr;				  float rx,ry,scal_prod_over_rsqr;
+   524	
+   525	  rx = X[i]-WP[iwp].x;						  rx = X[i]-WP[iwp].x;
+   526	  ry = Y[i]-WP[iwp].y;						  ry = Y[i]-WP[iwp].y;
+   527	  scal_prod_over_rsqr = (ry*VX[i] - rx*VY[i]) / SQR(r); 	  scal_prod_over_rsqr = (ry*VX[i] - rx*VY[i]) / SQR(r); 
+   528	  *fx = -Kappa * (0.5*D[i]-r) * (   ry * scal_prod_over_rsqr 	  *fx = -Kappa * (0.5*D[i]-r) * (   ry * scal_prod_over_rsqr 
+   529	  *fy = -Kappa * (0.5*D[i]-r) * ( - rx * scal_prod_over_rsqr 	  *fy = -Kappa * (0.5*D[i]-r) * ( - rx * scal_prod_over_rsqr 
+   530	}								}
+   531	
+   532	/*------------------------------*/				/*------------------------------*/
+   533	
+   534	void PP_PsychForce(int i1, int i2, float r, float *fx, float 	void PP_PsychForce(int i1, int i2, float r, float *fx, float 
+   535	
+   536	  float f_over_r;						  float f_over_r;
+   537	
+   538	  f_over_r = A*exp(-(r-0.5*(D[i1]+D[i2]))/B) / r;		  f_over_r = A*exp(-(r-0.5*(D[i1]+D[i2]))/B) / r;
+   539	  *fx = (X[i1]-X[i2]) * f_over_r;				  *fx = (X[i1]-X[i2]) * f_over_r;
+   540	  *fy = (Y[i1]-Y[i2]) * f_over_r;				  *fy = (Y[i1]-Y[i2]) * f_over_r;
+   541	}								}
+   542	
+   543	/*------------------------------*/				/*------------------------------*/
+   544	
+   545	void PP_YoungForce(int i1, int i2, float r, float *fx, float 	void PP_YoungForce(int i1, int i2, float r, float *fx, float 
+   546	
+   547	  float f_over_r;						  float f_over_r;
+   548	
+   549	  f_over_r = 2.0*C_Young*(0.5*(D[i1]+D[i2])-r) / r;		  f_over_r = 2.0*C_Young*(0.5*(D[i1]+D[i2])-r) / r;
+   550	  *fx = (X[i1]-X[i2]) * f_over_r;				  *fx = (X[i1]-X[i2]) * f_over_r;
+   551	  *fy = (Y[i1]-Y[i2]) * f_over_r;				  *fy = (Y[i1]-Y[i2]) * f_over_r;
+   552	}								}
+   553	
+   554	/*------------------------------*/				/*------------------------------*/
+   555	
+   556	void PP_TangForce_FS0(int i1, int i2, float r, float *fx, flo	void PP_TangForce_FS0(int i1, int i2, float r, float *fx, flo
+   557	  /* exerted by particle i2 on particle i1 */			  /* exerted by particle i2 on particle i1 */
+   558	
+   559	  float rx,ry,vx,vy,scal_prod_over_rsqr;			  float rx,ry,vx,vy,scal_prod_over_rsqr;
+   560	
+   561	  rx = X[i1]-X[i2];						  rx = X[i1]-X[i2];
+   562	  ry = Y[i1]-Y[i2];						  ry = Y[i1]-Y[i2];
+   563	  vx = VX[i1]-VX[i2];						  vx = VX[i1]-VX[i2];
+   564	  vy = VY[i1]-VY[i2];						  vy = VY[i1]-VY[i2];
+   565	  scal_prod_over_rsqr = (ry*vx - rx*vy) / SQR(r); 		  scal_prod_over_rsqr = (ry*vx - rx*vy) / SQR(r); 
+   566	  *fx = -Gamma * (   ry * scal_prod_over_rsqr );		  *fx = -Gamma * (   ry * scal_prod_over_rsqr );
+   567	  *fy = -Gamma * ( - rx * scal_prod_over_rsqr );		  *fy = -Gamma * ( - rx * scal_prod_over_rsqr );
+   568	}								}
+   569	
+   570	/*---------------------------*/ 				/*---------------------------*/ 
+   571	
+   572	void PP_TangForce_FS1(int i1, int i2, float r, float *fx, flo	void PP_TangForce_FS1(int i1, int i2, float r, float *fx, flo
+   573	  /* exerted by particle i2 on particle i1 */			  /* exerted by particle i2 on particle i1 */
+   574	
+   575	  float rx,ry,vx,vy,scal_prod_over_rsqr;			  float rx,ry,vx,vy,scal_prod_over_rsqr;
+   576	
+   577	  rx = X[i1]-X[i2];						  rx = X[i1]-X[i2];
+   578	  ry = Y[i1]-Y[i2];						  ry = Y[i1]-Y[i2];
+   579	  vx = VX[i1]-VX[i2];						  vx = VX[i1]-VX[i2];
+   580	  vy = VY[i1]-VY[i2];						  vy = VY[i1]-VY[i2];
+   581	  scal_prod_over_rsqr = (ry*vx - rx*vy) / SQR(r); 		  scal_prod_over_rsqr = (ry*vx - rx*vy) / SQR(r); 
+   582	  *fx = -Kappa * (0.5*(D[i1]+D[i2])-r) * (   ry * scal_prod_o	  *fx = -Kappa * (0.5*(D[i1]+D[i2])-r) * (   ry * scal_prod_o
+   583	  *fy = -Kappa * (0.5*(D[i1]+D[i2])-r) * ( - rx * scal_prod_o	  *fy = -Kappa * (0.5*(D[i1]+D[i2])-r) * ( - rx * scal_prod_o
+   584	}								}
+   585	
+   586	/*---------------------------*/ 				/*---------------------------*/ 
+   587	
+   588	float DirectionOfExit( int i ){					float DirectionOfExit( int i ){
+   589	  /* direction of exit for particle i */			  /* direction of exit for particle i */
+   590	
+   591	  float dsqr, /* sqr of particle center - door-post distance 	  float dsqr, /* sqr of particle center - door-post distance 
+   592	    rsqr; /* sqr of particle's radius */			    rsqr; /* sqr of particle's radius */
+   593	
+   594	
+   595	  /* behind the upper door-post */				  /* behind the upper door-post */
+   596	  if((Y[i]<=0.5*YS-0.5*DoorWidth+0.5*D[i]+EPSILON)&&(X[i]<=Ro	  if((Y[i]<=0.5*YS-0.5*DoorWidth+0.5*D[i]+EPSILON)&&(X[i]<=Ro
+   597	    								    
+   598	          dsqr = SQR(W[1].x2-X[i]) + SQR(W[1].y2-Y[i]);		          dsqr = SQR(W[1].x2-X[i]) + SQR(W[1].y2-Y[i]);
+   599		  rsqr = SQR(0.5*D[i])+EPSILON;					  rsqr = SQR(0.5*D[i])+EPSILON;
+   600		  if(dsqr<=rsqr){ 						  if(dsqr<=rsqr){ 
+   601		          /* very close to the door-post */			          /* very close to the door-post */
+   602		          if(Y[i]<=0.5*YS-0.5*DoorWidth){			          if(Y[i]<=0.5*YS-0.5*DoorWidth){
+   603			          return( 0.5*PI );					          return( 0.5*PI );
+   604			  }								  }
+   605			  else{								  else{
+   606			          return(   0.5*PI 					          return(   0.5*PI 
+   607					  + atan2( W[1].y2-Y[i],W[1].					  + atan2( W[1].y2-Y[i],W[1].
+   608					);  								);  
+   609			  }								  }
+   610		  }								  }
+   611		  else {							  else {
+   612		          /* well apart from the door-post */			          /* well apart from the door-post */
+   613		          return(   atan2( 1.0, sqrt(dsqr/rsqr-1.0) )		          return(   atan2( 1.0, sqrt(dsqr/rsqr-1.0) )
+   614	                          + atan2( W[1].y2-Y[i],W[1].x2-X[i] 	                          + atan2( W[1].y2-Y[i],W[1].x2-X[i] 
+   615			        );							        );
+   616		  }								  }
+   617	  }								  }
+   618	    								    
+   619	
+   620	  /* behind the lower door-post */				  /* behind the lower door-post */
+   621	  else if((Y[i]>=0.5*YS+0.5*DoorWidth-0.5*D[i]-EPSILON)&&(X[i	  else if((Y[i]>=0.5*YS+0.5*DoorWidth-0.5*D[i]-EPSILON)&&(X[i
+   622	
+   623	          dsqr = SQR(W[6].x2-X[i]) + SQR(W[6].y2-Y[i]);		          dsqr = SQR(W[6].x2-X[i]) + SQR(W[6].y2-Y[i]);
+   624		  rsqr = SQR(0.5*D[i])+EPSILON;					  rsqr = SQR(0.5*D[i])+EPSILON;
+   625		  if(dsqr<=rsqr){ 						  if(dsqr<=rsqr){ 
+   626		          /* very close to the door-post */			          /* very close to the door-post */
+   627		          if(Y[i]>=0.5*YS+0.5*DoorWidth){			          if(Y[i]>=0.5*YS+0.5*DoorWidth){
+   628			          return( -0.5*PI );					          return( -0.5*PI );
+   629			  }								  }
+   630			  else{								  else{
+   631			          return( - 0.5*PI					          return( - 0.5*PI
+   632					  + atan2( W[6].y2-Y[i],W[6].					  + atan2( W[6].y2-Y[i],W[6].
+   633					);								);
+   634			  }								  }
+   635		  }								  }
+   636		  else {							  else {
+   637		          /* well apart from the door-post */			          /* well apart from the door-post */
+   638		          return( - atan2( 1.0, sqrt(dsqr/rsqr-1.0) )		          return( - atan2( 1.0, sqrt(dsqr/rsqr-1.0) )
+   639	                          + atan2( W[6].y2-Y[i],W[6].x2-X[i] 	                          + atan2( W[6].y2-Y[i],W[6].x2-X[i] 
+   640			        );							        );
+   641		  }								  }
+   642	  }								  }
+   643	
+   644	
+   645	  /* in the center or outside */				  /* in the center or outside */
+   646	  else { return 0.0; }						  else { return 0.0; }
+   647	}								}
+   648	
+   649	/*-----------------------------------------------*/		/*-----------------------------------------------*/
+   650	
+   651	void RemoveParticle( int *n, int i ){				void RemoveParticle( int *n, int i ){
+   652	  /* *n: number of particles now				  /* *n: number of particles now
+   653	     i: index of particle to be removed */			     i: index of particle to be removed */
+   654	
+   655	  int j;							  int j;
+   656	  								  
+   657	
+   658	  /* (a) particle i (which is off-board now)			  /* (a) particle i (which is off-board now)
+   659	     is removed from the book-keeping				     is removed from the book-keeping
+   660	     (block determined by previous coordinates) 		     (block determined by previous coordinates) 
+   661	     (b) if i != *n-1 | not the last particle		      |	     (b) if i != *n-1 
+   662	         (b1) particle *n - 1 is removed from the book-keepin	         (b1) particle *n - 1 is removed from the book-keepin
+   663		      (block determined by previous coordinates)		      (block determined by previous coordinates)
+   664	         (b2) copying all values of particle *n-1 into i's pl	         (b2) copying all values of particle *n-1 into i's pl
+   665	         (b3) inserting particle i (that used to be indexed *	         (b3) inserting particle i (that used to be indexed *
+   666	              book-keeping, into the block given by the previ	              book-keeping, into the block given by the previ
+   667		      coordinates (Xprev[i],Yprev[i]), and not into t		      coordinates (Xprev[i],Yprev[i]), and not into t
+   668		      given by (X[i],Y[i])					      given by (X[i],Y[i])
+   669		      . reason: after this substitution (*n-1 -> i) 		      . reason: after this substitution (*n-1 -> i) 
+   670		      particle i will be looked for in the block of		      particle i will be looked for in the block of
+   671		      (Xprev[i],Yprev[i]) in Upd 				      (Xprev[i],Yprev[i]) in Upd 
+   672		      because no one tells the main cycle (located in		      because no one tells the main cycle (located in
+   673		      whether this particle is the result of a substi		      whether this particle is the result of a substi
+   674		      or not 							      or not 
+   675	     (c) decrement particle number  ( *n to *n - 1 ) */		     (c) decrement particle number  ( *n to *n - 1 ) */
+   676	
+   677	
+   678	  /* a */							  /* a */
+   679	  j = (int)floor(Xprev[i]*GX/XS) + G*(int)floor(Yprev[i]*GY/Y	  j = (int)floor(Xprev[i]*GX/XS) + G*(int)floor(Yprev[i]*GY/Y
+   680	  if(BIndBd[j]==i) {						  if(BIndBd[j]==i) {
+   681	          BIndBd[j] = BInd[i];					          BIndBd[j] = BInd[i];
+   682	  }								  }
+   683	  else {							  else {
+   684	          j = BIndBd[j];					          j = BIndBd[j];
+   685		  while(BInd[j]!=i) {						  while(BInd[j]!=i) {
+   686		          j = BInd[j];						          j = BInd[j];
+   687		  }								  }
+   688		  BInd[j] = BInd[i];						  BInd[j] = BInd[i];
+   689	  }  								  }  
+   690	
+   691	
+   692	
+   693	  /* b */							  /* b */
+   694	  if(i!=*n-1){							  if(i!=*n-1){
+   695	
+   696	          /* b1 */						          /* b1 */
+   697	    								    
+   698	          j = (int)floor(Xprev[*n-1]*GX/XS) + G*(int)floor(Yp	          j = (int)floor(Xprev[*n-1]*GX/XS) + G*(int)floor(Yp
+   699	          if(BIndBd[j]==*n-1) {					          if(BIndBd[j]==*n-1) {
+   700		          BIndBd[j] = BInd[*n-1];				          BIndBd[j] = BInd[*n-1];
+   701		  }								  }
+   702		  else {							  else {
+   703		          j = BIndBd[j];					          j = BIndBd[j];
+   704		          while(BInd[j]!=*n-1) {				          while(BInd[j]!=*n-1) {
+   705			          j = BInd[j];						          j = BInd[j];
+   706			  }								  }
+   707			  BInd[j] = BInd[*n-1];						  BInd[j] = BInd[*n-1];
+   708		  }  								  }  
+   709	
+   710	
+   711	
+   712	          /* b2 */						          /* b2 */
+   713	          D[i] = D[*n-1];					          D[i] = D[*n-1];
+   714		  Phi[i] = Phi[*n-1];						  Phi[i] = Phi[*n-1];
+   715		  X[i] = X[*n-1];						  X[i] = X[*n-1];
+   716		  Y[i] = Y[*n-1];						  Y[i] = Y[*n-1];
+   717		  V[i] = V[*n-1];						  V[i] = V[*n-1];
+   718		  VX[i] = VX[*n-1];						  VX[i] = VX[*n-1];
+   719		  VY[i] = VY[*n-1];						  VY[i] = VY[*n-1];
+   720		  Xprev[i] = Xprev[*n-1];					  Xprev[i] = Xprev[*n-1];
+   721		  Yprev[i] = Yprev[*n-1];					  Yprev[i] = Yprev[*n-1];
+   722		  Vdir[i]=Vdir[*n-1];						  Vdir[i]=Vdir[*n-1];
+   723		  Injured[i]=Injured[*n-1]; 					  Injured[i]=Injured[*n-1]; 
+   724		  IDs[i]=IDs[*n-1];  // SB			      <
+   725		  V0of[i]=V0of[*n-1];						  V0of[i]=V0of[*n-1];
+   726	
+   727		  								  
+   728	
+   729		  /* b3 */							  /* b3 */
+   730		  j = (int)floor(Xprev[i]*GX/XS) + G*(int)floor(Yprev		  j = (int)floor(Xprev[i]*GX/XS) + G*(int)floor(Yprev
+   731		  if(BIndBd[j]==-1) {						  if(BIndBd[j]==-1) {
+   732		          BIndBd[j] = i;					          BIndBd[j] = i;
+   733			  BInd[i] = -1;							  BInd[i] = -1;
+   734		  }								  }
+   735		  else {							  else {
+   736		          j = BIndBd[j];					          j = BIndBd[j];
+   737			  while(BInd[j]!=-1) {						  while(BInd[j]!=-1) {
+   738			          j = BInd[j];						          j = BInd[j];
+   739			  }								  }
+   740			  BInd[j] = i;							  BInd[j] = i;
+   741			  BInd[i] = -1;							  BInd[i] = -1;
+   742		  }								  }
+   743	  }								  }
+   744	
+   745	
+   746	
+   747	
+   748	  /* c */							  /* c */
+   749	  (*n)--;							  (*n)--;
+   750	}								}
+   751	
+   752	/*-----------------------------------------------------------	/*-----------------------------------------------------------
+   753	
+   754	void EulTStep( float *tstep, float f ){				void EulTStep( float *tstep, float f ){
+   755	  /* adjusts the time step in a way that the force (fx,fy) do	  /* adjusts the time step in a way that the force (fx,fy) do
+   756	     change the velocity of particle i by more than V_ChangeL	     change the velocity of particle i by more than V_ChangeL
+   757	  								  
+   758	  while( f*(*tstep) >= V_ChangeLimit ){ *tstep *= C_NS; }	  while( f*(*tstep) >= V_ChangeLimit ){ *tstep *= C_NS; }
+   759	}								}
+   760	
+   761	/********************************/				/********************************/
+   762	
+   763	void Start_Bare( int narg, char *argstr[] ){			void Start_Bare( int narg, char *argstr[] ){
+   764	  /* reading command line parameters and parameter file */	  /* reading command line parameters and parameter file */
+   765	
+   766	
+   767	  /* 1 */							  /* 1 */
+   768	
+   769	  switch(narg){							  switch(narg){
+   770	  case 1: { 							  case 1: { 
+   771	          MainSwitch = MainSwitch_DEFAULT; 			          MainSwitch = MainSwitch_DEFAULT; 
+   772		  strcpy(IFN,IFN_DEFAULT);					  strcpy(IFN,IFN_DEFAULT);
+   773		  strcpy(OFN,OFN_DEFAULT);					  strcpy(OFN,OFN_DEFAULT);
+   774		  strcpy(OF2N,OF2N_DEFAULT);					  strcpy(OF2N,OF2N_DEFAULT);
+   775		  strcpy(OF3N,OF3N_DEFAULT);			      <
+   776		  break; 							  break; 
+   777	  }								  }
+   778	  case 3:{							  case 3:{
+   779	          MainSwitch = atoi(argstr[1]); 			          MainSwitch = atoi(argstr[1]); 
+   780		  strcpy(IFN,argstr[2]);					  strcpy(IFN,argstr[2]);
+   781		  strcpy(OFN,OFN_DEFAULT);					  strcpy(OFN,OFN_DEFAULT);
+   782		  strcpy(OF2N,OF2N_DEFAULT);					  strcpy(OF2N,OF2N_DEFAULT);
+   783		  strcpy(OF3N,OF3N_DEFAULT);			      <
+   784		  break; 							  break; 
+   785	  }								  }
+   786	#ifdef _FLAG_SD_CRUNCH_C_					#ifdef _FLAG_SD_CRUNCH_C_
+   787	  case 6:{							  case 6:{
+   788	          /* running the program with the loadleveller */	          /* running the program with the loadleveller */
+   789	          RndSeed_main_1st = atoi(argstr[1]); 			          RndSeed_main_1st = atoi(argstr[1]); 
+   790	          MainSwitch = MainSwitch_DEFAULT; 			          MainSwitch = MainSwitch_DEFAULT; 
+   791		  strcpy(IFN,IFN_DEFAULT);					  strcpy(IFN,IFN_DEFAULT);
+   792		  strcpy(OFN,OFN_DEFAULT);					  strcpy(OFN,OFN_DEFAULT);
+   793		  strcpy(OF2N,OF2N_DEFAULT);					  strcpy(OF2N,OF2N_DEFAULT);
+   794		  strcpy(OF3N,OF3N_DEFAULT);			      <
+   795		  break; 							  break; 
+   796	  }								  }
+   797	#endif /* _FLAG_SD_CRUNCH_C_ */					#endif /* _FLAG_SD_CRUNCH_C_ */
+   798	  default:{							  default:{
+   799	          _E("Usage:  either \"sd <MainSwitch> <input file na	          _E("Usage:  either \"sd <MainSwitch> <input file na
+   800		  _E("        or     \"sd\" .\n");				  _E("        or     \"sd\" .\n");
+   801		  SD_LIB_EXIT;							  SD_LIB_EXIT;
+   802	  }}								  }}
+   803	  fprintf(stderr,"(default values are:\n MainSwitch = %d, inp |	  fprintf(stderr,"(default values are:\n MainSwitch = %d, inp
+   804	  fflush(stderr);						  fflush(stderr);
+   805	
+   806	
+   807	
+   808	
+   809	  /* 2 */							  /* 2 */
+   810	
+   811	  /* reading parameters */					  /* reading parameters */
+   812	  readpar ( "start", IFN, IPar, IParName, IParNum, 		  readpar ( "start", IFN, IPar, IParName, IParNum, 
+   813		     FPar, FParName, FParNum, SPar, SParName, SParNum		     FPar, FParName, FParNum, SPar, SParName, SParNum
+   814	
+   815	
+   816	  /* 3 */							  /* 3 */
+   817	
+   818	}								}
+   819	
+   820	/*----------------------------------------*/			/*----------------------------------------*/
+   821	
+   822	void Init_Bare( char *init_switch ){				void Init_Bare( char *init_switch ){
+   823	  /* 1 global vars, mem.alloc.					  /* 1 global vars, mem.alloc.
+   824	     2 walls, wpoints						     2 walls, wpoints
+   825	     3 particles						     3 particles
+   826	   */								   */
+   827	
+   828	  int i,j,ok_flag;						  int i,j,ok_flag;
+   829	
+   830	
+   831	
+   832	  /* 1 */							  /* 1 */
+   833	  stat(IFN, &IFStatBuf);					  stat(IFN, &IFStatBuf);
+   834	  IFModTime = IFStatBuf.st_mtime;				  IFModTime = IFStatBuf.st_mtime;
+   835	  UpdNum = 0;							  UpdNum = 0;
+   836	  Mb = 0;							  Mb = 0;
+   837	  Me = AyS-1;							  Me = AyS-1;
+   838	  SimTime = vector( Mb, Me );					  SimTime = vector( Mb, Me );
+   839	  SimTime[0] = 0.0;						  SimTime[0] = 0.0;
+   840	  srand(RndSeed);						  srand(RndSeed);
+   841	
+   842	  XS = RoomXSize+WallWidth+X11_RightRim+EPSILON;		  XS = RoomXSize+WallWidth+X11_RightRim+EPSILON;
+   843	  YS = RoomYSize;						  YS = RoomYSize;
+   844	  N = N0;							  N = N0;
+   845	  NInRoom = N0;							  NInRoom = N0;
+   846	
+   847	  GX = (int)MAX(1.0,floor(XS/R));				  GX = (int)MAX(1.0,floor(XS/R));
+   848	  GY = (int)MAX(1.0,floor(YS/R));				  GY = (int)MAX(1.0,floor(YS/R));
+   849	  G = (int)MAX(GX,GY);						  G = (int)MAX(GX,GY);
+   850	
+   851	  BIndBd = ivector( 0, SQR(G)-1 );				  BIndBd = ivector( 0, SQR(G)-1 );
+   852	  BInd = ivector( 0, N0-1 );					  BInd = ivector( 0, N0-1 );
+   853	  D = vector( 0, N0-1 );					  D = vector( 0, N0-1 );
+   854	  Phi = vector( 0, N0-1 );					  Phi = vector( 0, N0-1 );
+   855	  X = vector( 0, N0-1 );					  X = vector( 0, N0-1 );
+   856	  Y = vector( 0, N0-1 );					  Y = vector( 0, N0-1 );
+   857	  Xprev = vector( 0, N0-1 );					  Xprev = vector( 0, N0-1 );
+   858	  Yprev = vector( 0, N0-1 );					  Yprev = vector( 0, N0-1 );
+   859	  V = vector( 0, N0-1 );					  V = vector( 0, N0-1 );
+   860	  VX = vector( 0, N0-1 );					  VX = vector( 0, N0-1 );
+   861	  Vdir = vector(0,N0-1);					  Vdir = vector(0,N0-1);
+   862	  VY = vector( 0, N0-1 );					  VY = vector( 0, N0-1 );
+   863	  V0of = vector( 0, N0-1 );					  V0of = vector( 0, N0-1 );
+   864	  E = vector( Mb, Me );						  E = vector( Mb, Me );
+   865	  E[0] = 1.0;							  E[0] = 1.0;
+   866	  Injured = ivector(0,N0-1);					  Injured = ivector(0,N0-1);
+   867	  IDs = ivector(0,N0-1);				      <
+   868	
+   869	
+   870	
+   871	  /* 2 walls, wpoints */					  /* 2 walls, wpoints */
+   872	  /* allocating memory:						  /* allocating memory:
+   873	   * if there's a column at the door, 				   * if there's a column at the door, 
+   874	   * the four faces and corners of the column have to be init	   * the four faces and corners of the column have to be init
+   875	   * too  							   * too  
+   876	   */								   */
+   877	  W = (wall*)calloc(NW,sizeof(wall));				  W = (wall*)calloc(NW,sizeof(wall));
+   878	  WP = (wpoint*)calloc(NWP,sizeof(wpoint));			  WP = (wpoint*)calloc(NWP,sizeof(wpoint));
+   879	
+   880	
+   881	
+   882	  /* every wall rotated by PI/2 points towards the inside of 	  /* every wall rotated by PI/2 points towards the inside of 
+   883	
+   884	  /* upper part */						  /* upper part */
+   885	  W[0].x1 = 0.0;						  W[0].x1 = 0.0;
+   886	  W[0].y1 = 0.0;						  W[0].y1 = 0.0;
+   887	  W[0].x2 = XS;							  W[0].x2 = XS;
+   888	  W[0].y2 = 0.0;						  W[0].y2 = 0.0;
+   889	
+   890	  W[1].x1 = RoomXSize;						  W[1].x1 = RoomXSize;
+   891	  W[1].y1 = 0.0;						  W[1].y1 = 0.0;
+   892	  W[1].x2 = W[2].x1 = WP[0].x = RoomXSize;			  W[1].x2 = W[2].x1 = WP[0].x = RoomXSize;
+   893	  W[1].y2 = W[2].y1 = WP[0].y = 0.5*RoomYSize-0.5*DoorWidth;	  W[1].y2 = W[2].y1 = WP[0].y = 0.5*RoomYSize-0.5*DoorWidth;
+   894	  W[2].x2 = W[3].x1 = WP[1].x = RoomXSize+WallWidth;		  W[2].x2 = W[3].x1 = WP[1].x = RoomXSize+WallWidth;
+   895	  W[2].y2 = W[3].y1 = WP[1].y = 0.5*RoomYSize-0.5*DoorWidth;	  W[2].y2 = W[3].y1 = WP[1].y = 0.5*RoomYSize-0.5*DoorWidth;
+   896	  W[3].x2 = RoomXSize+WallWidth;				  W[3].x2 = RoomXSize+WallWidth;
+   897	  W[3].y2 = 0.0;						  W[3].y2 = 0.0;
+   898	
+   899	
+   900	  /* lower part */						  /* lower part */
+   901	  W[4].x1 = XS;							  W[4].x1 = XS;
+   902	  W[4].y1 = RoomYSize;						  W[4].y1 = RoomYSize;
+   903	  W[4].x2 = 0.0;						  W[4].x2 = 0.0;
+   904	  W[4].y2 = RoomYSize;						  W[4].y2 = RoomYSize;
+   905	  								  
+   906	  W[5].x1 = RoomXSize+WallWidth;				  W[5].x1 = RoomXSize+WallWidth;
+   907	  W[5].y1 = RoomYSize;						  W[5].y1 = RoomYSize;
+   908	  								  
+   909	  W[5].x2 = W[6].x1 = WP[2].x = RoomXSize+WallWidth;		  W[5].x2 = W[6].x1 = WP[2].x = RoomXSize+WallWidth;
+   910	  W[5].y2 = W[6].y1 = WP[2].y = 0.5*RoomYSize+0.5*DoorWidth;	  W[5].y2 = W[6].y1 = WP[2].y = 0.5*RoomYSize+0.5*DoorWidth;
+   911	  W[6].x2 = W[7].x1 = WP[3].x = RoomXSize;			  W[6].x2 = W[7].x1 = WP[3].x = RoomXSize;
+   912	  W[6].y2 = W[7].y1 = WP[3].y = 0.5*RoomYSize+0.5*DoorWidth;	  W[6].y2 = W[7].y1 = WP[3].y = 0.5*RoomYSize+0.5*DoorWidth;
+   913	  W[7].x2 = RoomXSize;						  W[7].x2 = RoomXSize;
+   914	  W[7].y2 = RoomYSize;						  W[7].y2 = RoomYSize;
+   915	
+   916	  								  
+   917	  /* left wall of the room */					  /* left wall of the room */
+   918	  W[8].x1 = 0.0;						  W[8].x1 = 0.0;
+   919	  W[8].y1 = RoomYSize;						  W[8].y1 = RoomYSize;
+   920	  W[8].x2 = 0.0;						  W[8].x2 = 0.0;
+   921	  W[8].y2 = 0.0;						  W[8].y2 = 0.0;
+   922	
+   923	
+   924	
+   925	
+   926	  /* 3 */							  /* 3 */
+   927	
+   928	  /* diameters and coordinates */				  /* diameters and coordinates */
+   929	  for(i=0; i<N; i++) {						  for(i=0; i<N; i++) {
+   930	      D[i] =   (Dmean + deltaD)					      D[i] =   (Dmean + deltaD)
+   931		     - 2.0*deltaD * rand()/(RAND_MAX+1.0);			     - 2.0*deltaD * rand()/(RAND_MAX+1.0);
+   932	      X[i] =   0.5*H*D[i]+EPSILON 				      X[i] =   0.5*H*D[i]+EPSILON 
+   933		     + (RoomXSize-H*D[i]-2.0*EPSILON)*rand()/(RAND_MA		     + (RoomXSize-H*D[i]-2.0*EPSILON)*rand()/(RAND_MA
+   934	      Y[i] =   0.5*H*D[i]+EPSILON 				      Y[i] =   0.5*H*D[i]+EPSILON 
+   935		     + (RoomYSize-H*D[i]-2.0*EPSILON)*rand()/(RAND_MA		     + (RoomYSize-H*D[i]-2.0*EPSILON)*rand()/(RAND_MA
+   936	
+   937	
+   938								      <
+   939	      /* checking whether far enough from the column */		      /* checking whether far enough from the column */
+   940	      ok_flag = 1;						      ok_flag = 1;
+   941	      switch(ColumnSwitch){					      switch(ColumnSwitch){
+   942	      default: case 0:{ break; }				      default: case 0:{ break; }
+   943	      case 1:{ 							      case 1:{ 
+   944		      if(   SQR(X[i]-ColumnCenterX)+SQR(Y[i]-ColumnCe		      if(   SQR(X[i]-ColumnCenterX)+SQR(Y[i]-ColumnCe
+   945			 <= SQR(0.5*(D[i]+ColumnD))+EPSILON				 <= SQR(0.5*(D[i]+ColumnD))+EPSILON
+   946			){								){
+   947			      ok_flag = 0;						      ok_flag = 0;
+   948			      i--;							      i--;
+   949		      } 							      } 
+   950		      break;							      break;
+   951	      }								      }
+   952	      }								      }
+   953	
+   954	
+   955	      /* checking distances to already existing particles */	      /* checking distances to already existing particles */
+   956	      if(ok_flag==1){						      if(ok_flag==1){
+   957		      for(j=0;j<i;j++) {					      for(j=0;j<i;j++) {
+   958			      if(     SQR(X[j] - X[i])					      if(     SQR(X[j] - X[i])
+   959				    + SQR(Y[j] - Y[i])						    + SQR(Y[j] - Y[i])
+   960				 <= SQR( 0.5*H*(D[i]+D[j]) ) + EPSILO				 <= SQR( 0.5*H*(D[i]+D[j]) ) + EPSILO
+   961				) {								) {
+   962				      i = i - 1;						      i = i - 1;
+   963				      j = i - 1;						      j = i - 1;
+   964			      }								      }
+   965		      }								      }
+   966	      }								      }
+   967	  }								  }
+   968	
+   969	
+   970	  /* book-keeping */						  /* book-keeping */
+   971	  for(i=0;i<SQR(G);i++){ BIndBd[i] = -1; }			  for(i=0;i<SQR(G);i++){ BIndBd[i] = -1; }
+   972	  for(i=0;i<N;i++){ BInd[i] = -1; }				  for(i=0;i<N;i++){ BInd[i] = -1; }
+   973	      							      <
+   974	  // SB IDs						      <
+   975	  for(i=0;i<N;i++){ IDs[i] = i; }			      <
+   976	
+   977	  for(i=0;i<N;i++) {						  for(i=0;i<N;i++) {
+   978	          j = (int)floor(X[i]*GX/XS) + G * (int)floor(Y[i]*GY	          j = (int)floor(X[i]*GX/XS) + G * (int)floor(Y[i]*GY
+   979	
+   980		  if(BIndBd[j]==-1) {						  if(BIndBd[j]==-1) {
+   981		          BIndBd[j] = i;					          BIndBd[j] = i;
+   982		  }								  }
+   983		  else {							  else {
+   984		          j = BIndBd[j];					          j = BIndBd[j];
+   985			  while(BInd[j]!=-1) {						  while(BInd[j]!=-1) {
+   986			          j = BInd[j];						          j = BInd[j];
+   987	                  }						                  }
+   988			  BInd[j] = i;							  BInd[j] = i;
+   989		  }								  }
+   990	  }								  }
+   991	
+   992	
+   993	
+   994	  /* injuries, velocities and preferred directions */		  /* injuries, velocities and preferred directions */
+   995	  NInjured = 0; 						  NInjured = 0; 
+   996	  for(i=0;i<N;i++){ Injured[i] = 0; }				  for(i=0;i<N;i++){ Injured[i] = 0; }
+   997	
+   998	  for(i=0;i<N;i++){						  for(i=0;i<N;i++){
+   999		  Phi[i] = DirectionOfExit( i );				  Phi[i] = DirectionOfExit( i );
+  1000		  Vdir[i] = Phi[i];						  Vdir[i] = Phi[i];
+  1001		  V[i]=0.0;							  V[i]=0.0;
+  1002		  V0of[i]=V0;							  V0of[i]=V0;
+  1003		  VX[i]=0.0;							  VX[i]=0.0;
+  1004		  VY[i]=0.0;							  VY[i]=0.0;
+  1005	  }								  }
+  1006	}								}
+  1007	
+  1008	/*------------------------------*/				/*------------------------------*/
+  1009	
+  1010	void Upd(){							void Upd(){
+  1011	
+  1012	  /* one parallel update step 					  /* one parallel update step 
+  1013	     using Euler's method with adaptive stepsize 		     using Euler's method with adaptive stepsize 
+  1014	     								     
+  1015	     0, allocating memory to local arrays			     0, allocating memory to local arrays
+  1016	     								     
+  1017	     1, forces							     1, forces
+  1018	        1, walls						        1, walls
+  1019		2, wpoints							2, wpoints
+  1020		3, pairs							3, pairs
+  1021		4, column							4, column
+  1022	        5, smoke force & injuries				        5, smoke force & injuries
+  1023	
+  1024	     2, 							     2, 
+  1025	        1. preparing update of the eq. of motion computing vx	        1. preparing update of the eq. of motion computing vx
+  1026	        2. if falling down is allowed, checking injuries	        2. if falling down is allowed, checking injuries
+  1027	
+  1028	     3,								     3,
+  1029	        1, current coordinates of particle i stored		        1, current coordinates of particle i stored
+  1030	        2, updating coordinates of particle i			        2, updating coordinates of particle i
+  1031	            (X[i],Y[i]) = (X[i],Y[i]) + (VX[i],VY[i]) * time 	            (X[i],Y[i]) = (X[i],Y[i]) + (VX[i],VY[i]) * time 
+  1032		  (if any particles have left, storing leaving times)		  (if any particles have left, storing leaving times)
+  1033	        3, removing particles that have dropped off (with X[i	        3, removing particles that have dropped off (with X[i
+  1034		4, updating book-keeping for remainig particles			4, updating book-keeping for remainig particles
+  1035		   								   
+  1036	     4, 1 efficiency in this update				     4, 1 efficiency in this update
+  1037	        2 for(i=0..N-1)						        2 for(i=0..N-1)
+  1038	          (VX[i],VY[i]) = (VXNew[i],VYNew[i])			          (VX[i],VY[i]) = (VXNew[i],VYNew[i])	
+  1039		3 updating preferred directions					3 updating preferred directions
+  1040		4 time step added to present time value				4 time step added to present time value
+  1041	
+  1042	     5, freeing mem. allocated to local arrays 			     5, freeing mem. allocated to local arrays 
+  1043	  */  								  */  
+  1044	
+  1045	
+  1046	  int allocN,i,j,k,l,mx,my,m,can_see,iwp,iw,j_old,j_new;	  int allocN,i,j,k,l,mx,my,m,can_see,iwp,iw,j_old,j_new;
+  1047	  float *fwallx,*fwally,*fwpointx,*fwpointy,*fpairx,*fpairy,	  float *fwallx,*fwally,*fwpointx,*fwpointy,*fpairx,*fpairy,
+  1048	    *fspx,*fspy,*fsumx,*fsumy,*vxnew,*vynew,tstep,tmpr,		    *fspx,*fspy,*fsumx,*fsumy,*vxnew,*vynew,tstep,tmpr,
+  1049	    tmp_fpsx,tmp_fpsy,tmp_fyox,tmp_fyoy,tmp_ftax,tmp_ftay,	    tmp_fpsx,tmp_fpsy,tmp_fyox,tmp_fyoy,tmp_ftax,tmp_ftay,
+  1050	    tmprsqr,sqrt_fact,ksi,eta,vnew,*ftmagsum,*fsmokex,*fsmoke	    tmprsqr,sqrt_fact,ksi,eta,vnew,*ftmagsum,*fsmokex,*fsmoke
+  1051	    x_smokefront,tmpf,f_over_r,scal_prod_over_rsqr,rx,ry,	    x_smokefront,tmpf,f_over_r,scal_prod_over_rsqr,rx,ry,
+  1052	    *fcolx,*fcoly;						    *fcolx,*fcoly;
+  1053	
+  1054	
+  1055	
+  1056	  /* 0 */							  /* 0 */
+  1057	  allocN=N;							  allocN=N;
+  1058	  fwallx=vector(0,allocN-1);					  fwallx=vector(0,allocN-1);
+  1059	  fwally=vector(0,allocN-1);					  fwally=vector(0,allocN-1);
+  1060	  fwpointx=vector(0,allocN-1);					  fwpointx=vector(0,allocN-1);
+  1061	  fwpointy=vector(0,allocN-1);					  fwpointy=vector(0,allocN-1);
+  1062	  fpairx=vector(0,allocN-1);					  fpairx=vector(0,allocN-1);
+  1063	  fpairy=vector(0,allocN-1);					  fpairy=vector(0,allocN-1);
+  1064	  fsmokex=vector(0,allocN-1);					  fsmokex=vector(0,allocN-1);
+  1065	  fsmokey=vector(0,allocN-1);					  fsmokey=vector(0,allocN-1);
+  1066	
+  1067	  fspx=vector(0,allocN-1);					  fspx=vector(0,allocN-1);
+  1068	  fspy=vector(0,allocN-1);					  fspy=vector(0,allocN-1);
+  1069	  fsumx=vector(0,allocN-1);					  fsumx=vector(0,allocN-1);
+  1070	  fsumy=vector(0,allocN-1);					  fsumy=vector(0,allocN-1);
+  1071	  vxnew=vector(0,allocN-1);					  vxnew=vector(0,allocN-1);
+  1072	  vynew=vector(0,allocN-1);					  vynew=vector(0,allocN-1);
+  1073	  ftmagsum=vector(0,allocN-1);					  ftmagsum=vector(0,allocN-1);
+  1074	  fcolx=vector(0,allocN-1);					  fcolx=vector(0,allocN-1);
+  1075	  fcoly=vector(0,allocN-1);					  fcoly=vector(0,allocN-1);
+  1076	
+  1077	
+  1078	
+  1079	  /* 1 */							  /* 1 */
+  1080	
+  1081	  /* 1.0 */							  /* 1.0 */
+  1082	  /* default values */						  /* default values */
+  1083	  tstep = DefaultDeltaT;					  tstep = DefaultDeltaT;
+  1084	  for(i=0;i<N;i++){ 						  for(i=0;i<N;i++){ 
+  1085	          fwallx[i] = 0.0;					          fwallx[i] = 0.0;
+  1086		  fwally[i] = 0.0;						  fwally[i] = 0.0;
+  1087		  fwpointx[i] = 0.0;						  fwpointx[i] = 0.0;
+  1088		  fwpointy[i] = 0.0;						  fwpointy[i] = 0.0;
+  1089		  fpairx[i] = 0.0;						  fpairx[i] = 0.0;
+  1090		  fpairy[i] = 0.0;						  fpairy[i] = 0.0;
+  1091	          fsmokex[i] = 0.0;					          fsmokex[i] = 0.0;
+  1092	          fsmokey[i] = 0.0;					          fsmokey[i] = 0.0;
+  1093	
+  1094		  fspx[i] = 0.0;						  fspx[i] = 0.0;
+  1095		  fspy[i] = 0.0;						  fspy[i] = 0.0;
+  1096		  fsumx[i] = 0.0;						  fsumx[i] = 0.0;
+  1097		  fsumy[i] = 0.0;						  fsumy[i] = 0.0;
+  1098		  ftmagsum[i] = 0.0;						  ftmagsum[i] = 0.0;
+  1099		  fcolx[i] = 0.0;						  fcolx[i] = 0.0;
+  1100		  fcoly[i] = 0.0;						  fcoly[i] = 0.0;
+  1101	  }								  }
+  1102	#ifdef _FLAG_SD_C_						#ifdef _FLAG_SD_C_
+  1103	  FW_x=0.0;							  FW_x=0.0;
+  1104	#endif /* _FLAG_SD_C_ */					#endif /* _FLAG_SD_C_ */
+  1105	
+  1106	
+  1107	
+  1108	
+  1109	
+  1110	  /* 1.1 */							  /* 1.1 */
+  1111	  /* wall force */						  /* wall force */
+  1112	  for(i=0;i<N;i++){						  for(i=0;i<N;i++){
+  1113	      for(iw=0;iw<NW;iw++){					      for(iw=0;iw<NW;iw++){
+  1114	
+  1115		  WallParticleRelation(iw,i,&tmpr,&can_see);			  WallParticleRelation(iw,i,&tmpr,&can_see);
+  1116	          if((can_see==1)&&(tmpr<=R)){				          if((can_see==1)&&(tmpr<=R)){
+  1117	
+  1118		      /* init */						      /* init */
+  1119		      tmp_fpsx = tmp_fpsy = 0.0;				      tmp_fpsx = tmp_fpsy = 0.0;
+  1120		      tmp_fyox = tmp_fyoy = 0.0;				      tmp_fyox = tmp_fyoy = 0.0;
+  1121		      tmp_ftax = tmp_ftay = 0.0;				      tmp_ftax = tmp_ftay = 0.0;
+  1122	
+  1123		      /* psychological force */					      /* psychological force */
+  1124		      WallPsychForce(iw,i,tmpr,&tmp_fpsx,&tmp_fpsy);		      WallPsychForce(iw,i,tmpr,&tmp_fpsx,&tmp_fpsy);
+  1125		      /* Young and tangential forces */				      /* Young and tangential forces */
+  1126		      if(tmpr<=0.5*D[i]){					      if(tmpr<=0.5*D[i]){
+  1127			  WallYoungForce(iw,i,tmpr,&tmp_fyox,&tmp_fyo			  WallYoungForce(iw,i,tmpr,&tmp_fyox,&tmp_fyo
+  1128			  switch(FrictionSwitch){					  switch(FrictionSwitch){
+  1129			  case 0:{							  case 0:{
+  1130			      WallTangForce_FS0(iw,i,&tmp_ftax,&tmp_f			      WallTangForce_FS0(iw,i,&tmp_ftax,&tmp_f
+  1131			      break;							      break;
+  1132			  }								  }
+  1133			  case 1:{							  case 1:{
+  1134			      WallTangForce_FS1(iw,i,tmpr,&tmp_ftax,&			      WallTangForce_FS1(iw,i,tmpr,&tmp_ftax,&
+  1135			      break;							      break;
+  1136			  }								  }
+  1137			  }								  }
+  1138		      }								      }
+  1139		      /* summing wall forces */					      /* summing wall forces */
+  1140		      if(Injured[i]==0){					      if(Injured[i]==0){
+  1141			  fwallx[i] += tmp_fpsx + tmp_fyox + tmp_ftax			  fwallx[i] += tmp_fpsx + tmp_fyox + tmp_ftax
+  1142			  fwally[i] += tmp_fpsy + tmp_fyoy + tmp_ftay			  fwally[i] += tmp_fpsy + tmp_fyoy + tmp_ftay
+  1143		      }								      }
+  1144		      else /* ie. if Injured[i]=1 */ {				      else /* ie. if Injured[i]=1 */ {
+  1145			  fwallx[i] += tmp_fyox + tmp_ftax;				  fwallx[i] += tmp_fyox + tmp_ftax;
+  1146			  fwally[i] += tmp_fyoy + tmp_ftay;				  fwally[i] += tmp_fyoy + tmp_ftay;
+  1147		      }								      }
+  1148	
+  1149		      /* sum of magnitude of touching forces */			      /* sum of magnitude of touching forces */
+  1150		      if(InjurySwitch==1){					      if(InjurySwitch==1){
+  1151			  ftmagsum[i] += sqrt(SQR(tmp_fyox)+SQR(tmp_f			  ftmagsum[i] += sqrt(SQR(tmp_fyox)+SQR(tmp_f
+  1152		      }								      }
+  1153	
+  1154		      /* measuring x component of touching force exer		      /* measuring x component of touching force exer
+  1155			 on walls left and right from exit 				 on walls left and right from exit 
+  1156			 -- only in demo mode */ 					 -- only in demo mode */ 
+  1157	#ifdef _FLAG_SD_C_						#ifdef _FLAG_SD_C_
+  1158		      if((iw==1)||(iw==7)){					      if((iw==1)||(iw==7)){
+  1159			  FW_x -= tmp_fyox + tmp_ftax;					  FW_x -= tmp_fyox + tmp_ftax;
+  1160		      }								      }
+  1161	#endif /* _FLAG_SD_C_ */					#endif /* _FLAG_SD_C_ */
+  1162		  }								  }
+  1163	      }								      }
+  1164	  }								  }
+  1165	
+  1166	
+  1167	
+  1168	  /* 1.2 */							  /* 1.2 */
+  1169	  /* wpoint force */						  /* wpoint force */
+  1170	  for(i=0;i<N;i++){						  for(i=0;i<N;i++){
+  1171	    for(iwp=0;iwp<NWP;iwp++){					    for(iwp=0;iwp<NWP;iwp++){
+  1172	
+  1173	        WPointParticleRelation(iwp,i,&tmpr,&can_see);		        WPointParticleRelation(iwp,i,&tmpr,&can_see);
+  1174		if((can_see==1)&&(tmpr<=R)){					if((can_see==1)&&(tmpr<=R)){
+  1175	
+  1176		        /* init */						        /* init */
+  1177		        tmp_fpsx = tmp_fpsy = 0.0;				        tmp_fpsx = tmp_fpsy = 0.0;
+  1178			tmp_fyox = tmp_fyoy = 0.0;					tmp_fyox = tmp_fyoy = 0.0;
+  1179			tmp_ftax = tmp_ftay = 0.0;					tmp_ftax = tmp_ftay = 0.0;
+  1180	
+  1181		        /* computing forces */  				        /* computing forces */  
+  1182		        WPointPsychForce(iwp,i,tmpr,&tmp_fpsx,&tmp_fp		        WPointPsychForce(iwp,i,tmpr,&tmp_fpsx,&tmp_fp
+  1183			if(tmpr<=0.5*D[i]){						if(tmpr<=0.5*D[i]){
+  1184			    WPointYoungForce(iwp,i,tmpr,&tmp_fyox,&tm			    WPointYoungForce(iwp,i,tmpr,&tmp_fyox,&tm
+  1185			    switch(FrictionSwitch){					    switch(FrictionSwitch){
+  1186			    case 0:{							    case 0:{
+  1187				WPointTangForce_FS0(iwp,i,tmpr,&tmp_f				WPointTangForce_FS0(iwp,i,tmpr,&tmp_f
+  1188				break;								break;
+  1189			    }								    }
+  1190			    case 1:{							    case 1:{
+  1191				WPointTangForce_FS1(iwp,i,tmpr,&tmp_f				WPointTangForce_FS1(iwp,i,tmpr,&tmp_f
+  1192				break;								break;
+  1193			    }								    }
+  1194			    }								    }
+  1195			}								}
+  1196	
+  1197			/* summing forces */						/* summing forces */
+  1198			if(Injured[i]==0){						if(Injured[i]==0){
+  1199			    fwpointx[i] += tmp_fpsx + tmp_fyox + tmp_			    fwpointx[i] += tmp_fpsx + tmp_fyox + tmp_
+  1200			    fwpointy[i] += tmp_fpsy + tmp_fyoy + tmp_			    fwpointy[i] += tmp_fpsy + tmp_fyoy + tmp_
+  1201			}								}
+  1202			else /* ie. if Injured[i]=1 */ {				else /* ie. if Injured[i]=1 */ {
+  1203			    fwpointx[i] += tmp_fyox + tmp_ftax;				    fwpointx[i] += tmp_fyox + tmp_ftax;
+  1204			    fwpointy[i] += tmp_fyoy + tmp_ftay;				    fwpointy[i] += tmp_fyoy + tmp_ftay;
+  1205			}								}
+  1206	
+  1207			/* sum of magnitude of touching forces */			/* sum of magnitude of touching forces */
+  1208			if(InjurySwitch==1){						if(InjurySwitch==1){
+  1209			    ftmagsum[i] += sqrt(SQR(tmp_fyox)+SQR(tmp			    ftmagsum[i] += sqrt(SQR(tmp_fyox)+SQR(tmp
+  1210			}								}
+  1211	
+  1212			/* measuring x component of touching force ex			/* measuring x component of touching force ex
+  1213			   on walls left and right from exit 				   on walls left and right from exit 
+  1214			   -- only in demo mode */ 					   -- only in demo mode */ 
+  1215	#ifdef _FLAG_SD_C_						#ifdef _FLAG_SD_C_
+  1216			if((iwp==0)||(iwp==3)){						if((iwp==0)||(iwp==3)){
+  1217			    FW_x -= tmp_fyox + tmp_ftax;				    FW_x -= tmp_fyox + tmp_ftax;
+  1218			}								}
+  1219	#endif /* _FLAG_SD_C_ */					#endif /* _FLAG_SD_C_ */
+  1220		}								}
+  1221	    }								    }
+  1222	  }								  }
+  1223	
+  1224	
+  1225	
+  1226	  /* 1.3 */ 							  /* 1.3 */ 
+  1227	  /* particle-particle forces */				  /* particle-particle forces */
+  1228	  for(i=0; i<N; i++) {  					  for(i=0; i<N; i++) {  
+  1229	
+  1230	    j = (int)floor(X[i]*GX/XS) + G * (int)floor(Y[i]*GY/YS);	    j = (int)floor(X[i]*GX/XS) + G * (int)floor(Y[i]*GY/YS);
+  1231	    for(k=-1;k<=1;k++){ for(l=-1;l<=1;l++){			    for(k=-1;k<=1;k++){ for(l=-1;l<=1;l++){
+  1232	
+  1233		mx = j%G+k; 							mx = j%G+k; 
+  1234		my = j/G+l;							my = j/G+l;
+  1235		if((mx>=0)&&(mx<GX)&&(my>=0)&&(my<GY)){				if((mx>=0)&&(mx<GX)&&(my>=0)&&(my<GY)){
+  1236	
+  1237		      m = BIndBd[ (mx+GX)%GX + G * (my%GY) ];			      m = BIndBd[ (mx+GX)%GX + G * (my%GY) ];
+  1238		      /* checking each pair of particles only once */		      /* checking each pair of particles only once */
+  1239		      while(m>=i) { m = BInd[m]; }				      while(m>=i) { m = BInd[m]; }
+  1240		      if(m!=-1) {						      if(m!=-1) {
+  1241			do { 								do { 
+  1242	
+  1243			  tmprsqr = SQR(X[i]-X[m]) + SQR(Y[i]-Y[m]);			  tmprsqr = SQR(X[i]-X[m]) + SQR(Y[i]-Y[m]);
+  1244			  if( tmprsqr <= SQR(R) ){					  if( tmprsqr <= SQR(R) ){
+  1245			      tmpr = sqrt(tmprsqr);					      tmpr = sqrt(tmprsqr);
+  1246			      								      
+  1247			      /* init */						      /* init */
+  1248			      tmp_fpsx = tmp_fpsy = 0.0;				      tmp_fpsx = tmp_fpsy = 0.0;
+  1249			      tmp_fyox = tmp_fyoy = 0.0;				      tmp_fyox = tmp_fyoy = 0.0;
+  1250			      tmp_ftax = tmp_ftay = 0.0;				      tmp_ftax = tmp_ftay = 0.0;
+  1251	
+  1252			      /* pair forces */						      /* pair forces */
+  1253			      /* Force(i,m,...) gives the force exert			      /* Force(i,m,...) gives the force exert
+  1254				 on i, all forces are symmetric now *				 on i, all forces are symmetric now *
+  1255			      PP_PsychForce(i,m,tmpr,&tmp_fpsx,&tmp_f			      PP_PsychForce(i,m,tmpr,&tmp_fpsx,&tmp_f
+  1256			      if(tmpr<=0.5*(D[i]+D[m])){				      if(tmpr<=0.5*(D[i]+D[m])){
+  1257				  PP_YoungForce(i,m,tmpr,&tmp_fyox,&t				  PP_YoungForce(i,m,tmpr,&tmp_fyox,&t
+  1258				  switch(FrictionSwitch){					  switch(FrictionSwitch){
+  1259				  case 0:{							  case 0:{
+  1260				      PP_TangForce_FS0(i,m,tmpr,&tmp_				      PP_TangForce_FS0(i,m,tmpr,&tmp_
+  1261				      break;							      break;
+  1262				  }								  }
+  1263				  case 1:{							  case 1:{
+  1264				      PP_TangForce_FS1(i,m,tmpr,&tmp_				      PP_TangForce_FS1(i,m,tmpr,&tmp_
+  1265				      break;							      break;
+  1266				  }								  }
+  1267				  }								  }
+  1268			      }								      }
+  1269	
+  1270			      /* summing forces */					      /* summing forces */
+  1271			      if(Injured[i]==0){					      if(Injured[i]==0){
+  1272				  fpairx[i] += tmp_fpsx + tmp_fyox + 				  fpairx[i] += tmp_fpsx + tmp_fyox + 
+  1273				  fpairy[i] += tmp_fpsy + tmp_fyoy + 				  fpairy[i] += tmp_fpsy + tmp_fyoy + 
+  1274			      }								      }
+  1275			      else{ /* ie. if Injured[i]=1 */				      else{ /* ie. if Injured[i]=1 */
+  1276				  fpairx[i] += tmp_fyox + tmp_ftax;				  fpairx[i] += tmp_fyox + tmp_ftax;
+  1277				  fpairy[i] += tmp_fyoy + tmp_ftay;				  fpairy[i] += tmp_fyoy + tmp_ftay;
+  1278			      }								      }
+  1279			      if(Injured[m]==0){					      if(Injured[m]==0){
+  1280				  fpairx[m] -= tmp_fpsx + tmp_fyox + 				  fpairx[m] -= tmp_fpsx + tmp_fyox + 
+  1281				  fpairy[m] -= tmp_fpsy + tmp_fyoy + 				  fpairy[m] -= tmp_fpsy + tmp_fyoy + 
+  1282			      }								      }
+  1283			      else{ /* ie. if Injured[m]=1 */				      else{ /* ie. if Injured[m]=1 */
+  1284				  fpairx[m] -= tmp_fyox + tmp_ftax;				  fpairx[m] -= tmp_fyox + tmp_ftax;
+  1285				  fpairy[m] -= tmp_fyoy + tmp_ftay;				  fpairy[m] -= tmp_fyoy + tmp_ftay;
+  1286			      }								      }
+  1287	
+  1288			      /* sum of magnitude of touching forces 			      /* sum of magnitude of touching forces 
+  1289			      if(InjurySwitch==1){					      if(InjurySwitch==1){
+  1290				  ftmagsum[i] += sqrt(SQR(tmp_fyox)+S				  ftmagsum[i] += sqrt(SQR(tmp_fyox)+S
+  1291				  ftmagsum[m] += sqrt(SQR(tmp_fyox)+S				  ftmagsum[m] += sqrt(SQR(tmp_fyox)+S
+  1292			      }								      }
+  1293			  }								  }
+  1294	
+  1295			  m = BInd[m]; 							  m = BInd[m]; 
+  1296			  while(m>=i) { m = BInd[m]; }					  while(m>=i) { m = BInd[m]; }
+  1297			      								      
+  1298			}while(m!=-1);							}while(m!=-1);
+  1299		      }								      }
+  1300		}								}
+  1301	    }}								    }}
+  1302	  }								  }
+  1303	
+  1304	
+  1305	
+  1306	  /* 1.4 							  /* 1.4 
+  1307	   * column							   * column
+  1308	   */								   */
+  1309	  switch(ColumnSwitch){						  switch(ColumnSwitch){
+  1310	  default: case 0:{ 						  default: case 0:{ 
+  1311	      for(i=0;i<N;i++){						      for(i=0;i<N;i++){
+  1312		  fcolx[i] = fcoly[i] = 0.0;					  fcolx[i] = fcoly[i] = 0.0;
+  1313	      }								      }
+  1314	      break; 							      break; 
+  1315	  }								  }
+  1316	  case 1:{							  case 1:{
+  1317	      for(i=0;i<N;i++){						      for(i=0;i<N;i++){
+  1318		  tmprsqr = SQR(X[i]-ColumnCenterX)+SQR(Y[i]-ColumnCe		  tmprsqr = SQR(X[i]-ColumnCenterX)+SQR(Y[i]-ColumnCe
+  1319		  if(tmprsqr<=SQR(R)){						  if(tmprsqr<=SQR(R)){
+  1320		      tmpr=sqrt(tmprsqr);					      tmpr=sqrt(tmprsqr);
+  1321		      								      
+  1322		      /* init */						      /* init */
+  1323		      tmp_fpsx = tmp_fpsy = 0.0;				      tmp_fpsx = tmp_fpsy = 0.0;
+  1324		      tmp_fyox = tmp_fyoy = 0.0;				      tmp_fyox = tmp_fyoy = 0.0;
+  1325		      tmp_ftax = tmp_ftay = 0.0;				      tmp_ftax = tmp_ftay = 0.0;
+  1326		      								      
+  1327		      /* computing forces */					      /* computing forces */
+  1328		      /* psychological */					      /* psychological */
+  1329		      f_over_r = A * exp(-(tmpr-0.5*(D[i]+ColumnD))/B		      f_over_r = A * exp(-(tmpr-0.5*(D[i]+ColumnD))/B
+  1330		      tmp_fpsx = (X[i]-ColumnCenterX) * f_over_r;		      tmp_fpsx = (X[i]-ColumnCenterX) * f_over_r;
+  1331		      tmp_fpsy = (Y[i]-ColumnCenterY) * f_over_r;		      tmp_fpsy = (Y[i]-ColumnCenterY) * f_over_r;
+  1332		      /* touching */						      /* touching */
+  1333		      if(tmpr<=0.5*(D[i]+ColumnD)){				      if(tmpr<=0.5*(D[i]+ColumnD)){
+  1334			  /* Young */							  /* Young */
+  1335			  f_over_r = 2.0*C_Young*(0.5*(D[i]+ColumnD)-			  f_over_r = 2.0*C_Young*(0.5*(D[i]+ColumnD)-
+  1336			  tmp_fyox = (X[i]-ColumnCenterX) * f_over_r;			  tmp_fyox = (X[i]-ColumnCenterX) * f_over_r;
+  1337			  tmp_fyoy = (Y[i]-ColumnCenterY) * f_over_r;			  tmp_fyoy = (Y[i]-ColumnCenterY) * f_over_r;
+  1338			  /* friction */						  /* friction */
+  1339			  rx = X[i]-ColumnCenterX;					  rx = X[i]-ColumnCenterX;
+  1340			  ry = Y[i]-ColumnCenterY;					  ry = Y[i]-ColumnCenterY;
+  1341			  scal_prod_over_rsqr = (ry*VX[i] - rx*VY[i])			  scal_prod_over_rsqr = (ry*VX[i] - rx*VY[i])
+  1342			  switch(FrictionSwitch){					  switch(FrictionSwitch){
+  1343			  case 0:{							  case 0:{
+  1344			      tmp_ftax = -Gamma * (   ry * scal_prod_			      tmp_ftax = -Gamma * (   ry * scal_prod_
+  1345			      tmp_ftay = -Gamma * ( - rx * scal_prod_			      tmp_ftay = -Gamma * ( - rx * scal_prod_
+  1346			      break;							      break;
+  1347			  }								  }
+  1348			  case 1:{							  case 1:{
+  1349			      tmp_ftax =   -Kappa * (0.5*(D[i]+Column			      tmp_ftax =   -Kappa * (0.5*(D[i]+Column
+  1350				         * (   ry * scal_prod_over_rs				         * (   ry * scal_prod_over_rs
+  1351			      tmp_ftay =   -Kappa * (0.5*(D[i]+Column			      tmp_ftay =   -Kappa * (0.5*(D[i]+Column
+  1352				         * ( - rx * scal_prod_over_rs				         * ( - rx * scal_prod_over_rs
+  1353			      break;							      break;
+  1354			  }								  }
+  1355			  }								  }
+  1356		      }								      }
+  1357	
+  1358	
+  1359		      /* summing forces */					      /* summing forces */
+  1360		      if(Injured[i]==0){					      if(Injured[i]==0){
+  1361			      fcolx[i] = tmp_fpsx + tmp_fyox + tmp_ft			      fcolx[i] = tmp_fpsx + tmp_fyox + tmp_ft
+  1362			      fcoly[i] = tmp_fpsy + tmp_fyoy + tmp_ft			      fcoly[i] = tmp_fpsy + tmp_fyoy + tmp_ft
+  1363		      }								      }
+  1364		      else /* ie. if Injured[i]==1 */ {				      else /* ie. if Injured[i]==1 */ {
+  1365			      fcolx[i] = tmp_fyox + tmp_ftax;				      fcolx[i] = tmp_fyox + tmp_ftax;
+  1366			      fcoly[i] = tmp_fyoy + tmp_ftay;				      fcoly[i] = tmp_fyoy + tmp_ftay;
+  1367		      }								      }
+  1368	
+  1369		      								      
+  1370		      /* sum of magnitude of touching forces */			      /* sum of magnitude of touching forces */
+  1371		      if(InjurySwitch==1){					      if(InjurySwitch==1){
+  1372			      ftmagsum[i] += sqrt(SQR(tmp_fyox)+SQR(t			      ftmagsum[i] += sqrt(SQR(tmp_fyox)+SQR(t
+  1373		      }								      }
+  1374		  }								  }
+  1375	      }								      }
+  1376	      break;							      break;
+  1377	  }								  }
+  1378	  }								  }
+  1379	  								  
+  1380	
+  1381	
+  1382	  /* 1.5 */							  /* 1.5 */
+  1383	  /* injuries */						  /* injuries */
+  1384	
+  1385	  switch(InjurySwitch){						  switch(InjurySwitch){
+  1386	  case 0: { break; }						  case 0: { break; }
+  1387	  case 1:{ 							  case 1:{ 
+  1388	      								      
+  1389	      /* case: people crushed */				      /* case: people crushed */
+  1390	      for(i=0;i<N;i++){						      for(i=0;i<N;i++){
+  1391	
+  1392		  /* newly injured */						  /* newly injured */
+  1393		  if((ftmagsum[i]>FCrush_over_1m*PI*D[i])&&(Injured[i		  if((ftmagsum[i]>FCrush_over_1m*PI*D[i])&&(Injured[i
+  1394		      Injured[i] = 1;						      Injured[i] = 1;
+  1395		      NInjured++;						      NInjured++;
+  1396		      V0of[i] = 0.0;						      V0of[i] = 0.0;
+  1397		  }								  }
+  1398	      }								      }
+  1399	      break; 							      break; 
+  1400	  }								  }
+  1401	  case 2: case 3: { 						  case 2: case 3: { 
+  1402	
+  1403	      /* case: smoke front */					      /* case: smoke front */
+  1404	      if(SimTime[UpdNum]>=SmokeStartTime){			      if(SimTime[UpdNum]>=SmokeStartTime){
+  1405		  x_smokefront = (SimTime[UpdNum]-SmokeStartTime)*VSm		  x_smokefront = (SimTime[UpdNum]-SmokeStartTime)*VSm
+  1406	
+  1407		  for(i=0;i<N;i++){						  for(i=0;i<N;i++){
+  1408		      /* checking position compared to smoke front */		      /* checking position compared to smoke front */
+  1409		      tmpr = X[i] - x_smokefront;				      tmpr = X[i] - x_smokefront;
+  1410	
+  1411		      /* center of particle behind smoke front: injur		      /* center of particle behind smoke front: injur
+  1412		      if( tmpr < 0.5*D[i] ){ 					      if( tmpr < 0.5*D[i] ){ 
+  1413			  if(Injured[i]==0){ 						  if(Injured[i]==0){ 
+  1414			      Injured[i] = 1;						      Injured[i] = 1;
+  1415			      NInjured++;						      NInjured++;
+  1416			      V0of[i] = 0.0;						      V0of[i] = 0.0;
+  1417			      VX[i] = VY[i] = 0.0;					      VX[i] = VY[i] = 0.0;
+  1418			  }								  }
+  1419		      }								      }
+  1420		      /* ahead of front but within its interaction ra		      /* ahead of front but within its interaction ra
+  1421			 trying to escape */ 						 trying to escape */ 
+  1422		      if( (tmpr>=0.5*D[i])&&(tmpr<=R) ){			      if( (tmpr>=0.5*D[i])&&(tmpr<=R) ){
+  1423			  tmpf = A_fire*exp(-(tmpr-0.5*D[i])/B_fire);			  tmpf = A_fire*exp(-(tmpr-0.5*D[i])/B_fire);
+  1424			  fsmokex[i] += cos(Phi[i])*tmpf;				  fsmokex[i] += cos(Phi[i])*tmpf;
+  1425			  fsmokey[i] += sin(Phi[i])*tmpf;				  fsmokey[i] += sin(Phi[i])*tmpf;
+  1426		      }								      }
+  1427		  }								  }
+  1428	      }								      }
+  1429	      break;							      break;
+  1430	  }								  }
+  1431	  }								  }
+  1432	
+  1433	
+  1434	
+  1435	  /* 2 */							  /* 2 */
+  1436	
+  1437	  /* 2.1 preparing update of the eq. of motion */		  /* 2.1 preparing update of the eq. of motion */
+  1438	
+  1439	  sqrt_fact = sqrt(tstep/DefaultDeltaT);			  sqrt_fact = sqrt(tstep/DefaultDeltaT);
+  1440	  for(i=0;i<N;i++) { 						  for(i=0;i<N;i++) { 
+  1441	
+  1442		  /* SB Update so that goal force becomes higher when <
+  1443		  float gfactor=1.0;				      <
+  1444		  // set gfactor as a logistic function based on dist <
+  1445		  float distFromDoor=0;				      <
+  1446		  distFromDoor=sqrt(SQR(X[i]-RoomXSize) + SQR(Y[i]-YS <
+  1447		  //u0s1					      <
+  1448		  if ((B>0.16) && (V0of[i]<3.0)){		      <
+  1449					  //fprintf(stderr,"distFromD <
+  1450					  //fflush(stderr);	      <
+  1451	                                  gfactor=1.0+100.0*exp(-dist <
+  1452	                          }				      <
+  1453		  //u1s1					      <
+  1454		  if ((B>0.16) && (V0of[i]>3.0)){		      <
+  1455					  //fprintf(stderr,"distFromD <
+  1456					  //fflush(stderr);	      <
+  1457	                                  gfactor=1.0+20.0*exp(-distF <
+  1458	                          }				      <
+  1459		  /*						      <
+  1460		  if (X[i] > 8.0){				      <
+  1461			  if (fabs(Y[i]-5) < 1.0){		      <
+  1462				  // u0s1			      <
+  1463				  if ((B>0.16) && (V0of[i]<3.0)){     <
+  1464					  gfactor=10.0;		      <
+  1465				  } // u1s1			      <
+  1466				  else if((B>0.16) && (V0of[i]>3.0)){ <
+  1467					  gfactor=2.0;		      <
+  1468				  }else{gfactor=1.0;}		      <
+  1469		  }}						      <
+  1470		  */						      <
+  1471	          /* self-propelling */				      <
+  1472	          fspx[i] = gfactor*1/Tau * (V0of[i]*cos(Phi[i]) - VX <
+  1473		  fspy[i] = gfactor*1/Tau * (V0of[i]*sin(Phi[i]) - VY <
+  1474								      <
+  1475	          /* self-propelling */					          /* self-propelling */
+  1476	          //fspx[i] = 1/Tau * (V0of[i]*cos(Phi[i]) - VX[i]);  |	          fspx[i] = 1/Tau * (V0of[i]*cos(Phi[i]) - VX[i]);
+  1477		  //fspy[i] = 1/Tau * (V0of[i]*sin(Phi[i]) - VY[i]);  |		  fspy[i] = 1/Tau * (V0of[i]*sin(Phi[i]) - VY[i]);
+  1478	
+  1479		  /* noise */							  /* noise */
+  1480		  if(GaTh!=0.0){ 						  if(GaTh!=0.0){ 
+  1481		          ksi = GaussRand(GaMe, GaTh, GaCM);			          ksi = GaussRand(GaMe, GaTh, GaCM);
+  1482			  eta = 2.0*PI * rand() / (RAND_MAX+1.0);			  eta = 2.0*PI * rand() / (RAND_MAX+1.0);
+  1483		  }								  }
+  1484		  else{ ksi=0.0; eta=0.0; }					  else{ ksi=0.0; eta=0.0; }
+  1485	
+  1486	
+  1487		  /* sum of forces */						  /* sum of forces */
+  1488		  fsumx[i] =   fspx[i] + fpairx[i] + fwallx[i] + fwpo		  fsumx[i] =   fspx[i] + fpairx[i] + fwallx[i] + fwpo
+  1489		             + sqrt_fact * ksi * cos(eta);			             + sqrt_fact * ksi * cos(eta);
+  1490		  fsumy[i] =   fspy[i] + fpairy[i] + fwally[i] + fwpo		  fsumy[i] =   fspy[i] + fpairy[i] + fwally[i] + fwpo
+  1491		             + sqrt_fact * ksi * sin(eta);			             + sqrt_fact * ksi * sin(eta);
+  1492		  								  
+  1493	
+  1494		  /* adding smoke force */					  /* adding smoke force */
+  1495		  if((InjurySwitch==2)||(InjurySwitch==3)){			  if((InjurySwitch==2)||(InjurySwitch==3)){
+  1496		      fsumx[i] += fsmokex[i];					      fsumx[i] += fsmokex[i];
+  1497		      fsumy[i] += fsmokey[i];					      fsumy[i] += fsmokey[i];
+  1498		  }								  }
+  1499		  /* adding force of column */					  /* adding force of column */
+  1500		  switch(ColumnSwitch){						  switch(ColumnSwitch){
+  1501		  default: case 0:{ break; }					  default: case 0:{ break; }
+  1502		  case 1:{							  case 1:{
+  1503		      fsumx[i] += fcolx[i];					      fsumx[i] += fcolx[i];
+  1504		      fsumy[i] += fcoly[i];					      fsumy[i] += fcoly[i];
+  1505		      break;							      break;
+  1506		  }								  }
+  1507		  }								  }
+  1508	
+  1509	
+  1510		  /* time step adjustment for velocity change */		  /* time step adjustment for velocity change */
+  1511		  EulTStep( &tstep, sqrt(SQR(fsumx[i])+SQR(fsumy[i]))		  EulTStep( &tstep, sqrt(SQR(fsumx[i])+SQR(fsumy[i]))
+  1512	
+  1513	
+  1514		  /* new velocity */						  /* new velocity */
+  1515		  if(  (Injured[i]==1)						  if(  (Injured[i]==1)
+  1516		     &&((InjurySwitch==1)||(InjurySwitch==3))			     &&((InjurySwitch==1)||(InjurySwitch==3))
+  1517		    ){								    ){
+  1518		          vxnew[i] = 0.0;					          vxnew[i] = 0.0;
+  1519			  vynew[i] = 0.0;						  vynew[i] = 0.0;
+  1520		  }								  }
+  1521		  else{								  else{
+  1522		          vxnew[i] = VX[i] + fsumx[i] * tstep;			          vxnew[i] = VX[i] + fsumx[i] * tstep;
+  1523			  vynew[i] = VY[i] + fsumy[i] * tstep;				  vynew[i] = VY[i] + fsumy[i] * tstep;
+  1524		  }								  }
+  1525	
+  1526		    								    
+  1527		  /* checking new velocity */					  /* checking new velocity */
+  1528		  vnew = sqrt( SQR(vxnew[i]) + SQR(vynew[i]) );			  vnew = sqrt( SQR(vxnew[i]) + SQR(vynew[i]) );
+  1529		  if(vnew > Vmax) {						  if(vnew > Vmax) {
+  1530		          vxnew[i] = vxnew[i]/vnew * Vmax;			          vxnew[i] = vxnew[i]/vnew * Vmax;
+  1531			  vynew[i] = vynew[i]/vnew * Vmax;				  vynew[i] = vynew[i]/vnew * Vmax;
+  1532		  }								  }
+  1533	  }								  }
+  1534	
+  1535	
+  1536	
+  1537	
+  1538	  /* 3 */							  /* 3 */
+  1539	
+  1540	  for(i=0; i<N; i++) { 						  for(i=0; i<N; i++) { 
+  1541	
+  1542	          /* .1 */						          /* .1 */
+  1543		  Xprev[i] = X[i];						  Xprev[i] = X[i];
+  1544		  Yprev[i] = Y[i];						  Yprev[i] = Y[i];
+  1545	
+  1546	          /* .2 */						          /* .2 */
+  1547		  X[i] += VX[i] * tstep;					  X[i] += VX[i] * tstep;
+  1548		  Y[i] += VY[i] * tstep;					  Y[i] += VY[i] * tstep;
+  1549	
+  1550								      <
+  1551		  if((Xprev[i]>RoomXSize)&&(X[i]<=RoomXSize)){ NInRoo		  if((Xprev[i]>RoomXSize)&&(X[i]<=RoomXSize)){ NInRoo
+  1552		  if((Xprev[i]<=RoomXSize)&&(X[i]>RoomXSize)){			  if((Xprev[i]<=RoomXSize)&&(X[i]>RoomXSize)){
+  1553		      NInRoom--;						      NInRoom--;
+  1554	#ifdef _FLAG_SD_CRUNCH_C_					#ifdef _FLAG_SD_CRUNCH_C_
+  1555		      Tleave[RndSeed_main_index][VSmoke_main_index][N		      Tleave[RndSeed_main_index][VSmoke_main_index][N
+  1556			  SimTime[UpdNum];						  SimTime[UpdNum];
+  1557	#endif /* _FLAG_SD_CRUNCH_C_ */					#endif /* _FLAG_SD_CRUNCH_C_ */
+  1558		  }								  }
+  1559	  }								  }
+  1560	
+  1561	  								  
+  1562	  /* .3 and .4 */						  /* .3 and .4 */
+  1563	  for(i=0;i<N;i++){						  for(i=0;i<N;i++){
+  1564	
+  1565		  /* (a) if the particle is on the board, its book-ke		  /* (a) if the particle is on the board, its book-ke
+  1566		     arrays are modified only if its block has change		     arrays are modified only if its block has change
+  1567		     the last update						     the last update
+  1568		     (b) if the particle is off-board, it will be rem		     (b) if the particle is off-board, it will be rem
+  1569	
+  1570	
+  1571	          /* a */						          /* a */
+  1572		  if(X[i]<XS){							  if(X[i]<XS){
+  1573		          j_old =   (int)floor(Xprev[i]*GX/XS) 			          j_old =   (int)floor(Xprev[i]*GX/XS) 
+  1574			          + G*(int)floor(Yprev[i]*GY/YS);			          + G*(int)floor(Yprev[i]*GY/YS);
+  1575		          j_new = (int)floor(X[i]*GX/XS) + G*(int)flo		          j_new = (int)floor(X[i]*GX/XS) + G*(int)flo
+  1576			  if( j_new != j_old ) {					  if( j_new != j_old ) {
+  1577	
+  1578			      /* deleting particle i from its old blo			      /* deleting particle i from its old blo
+  1579			      j = j_old;						      j = j_old;
+  1580			      if(BIndBd[j]==i) {					      if(BIndBd[j]==i) {
+  1581			          BIndBd[j] = BInd[i];					          BIndBd[j] = BInd[i];
+  1582			      }								      }
+  1583			      else {							      else {
+  1584			          j = BIndBd[j];					          j = BIndBd[j];
+  1585				  while(BInd[j]!=i) {						  while(BInd[j]!=i) {
+  1586				          j = BInd[j];						          j = BInd[j];
+  1587				  }								  }
+  1588				  BInd[j] = BInd[i];						  BInd[j] = BInd[i];
+  1589			      }								      }
+  1590			  								  
+  1591	
+  1592			      /* inserting particle i into its new bl			      /* inserting particle i into its new bl
+  1593			      j = j_new;						      j = j_new;
+  1594			      if(BIndBd[j]==-1) {					      if(BIndBd[j]==-1) {
+  1595			          BIndBd[j] = i;					          BIndBd[j] = i;
+  1596				  BInd[i] = -1;							  BInd[i] = -1;
+  1597			      }								      }
+  1598			      else {							      else {
+  1599			          j = BIndBd[j];					          j = BIndBd[j];
+  1600				  while(BInd[j]!=-1) {						  while(BInd[j]!=-1) {
+  1601				          j = BInd[j];						          j = BInd[j];
+  1602				  }								  }
+  1603				  BInd[j] = i;							  BInd[j] = i;
+  1604				  BInd[i] = -1;							  BInd[i] = -1;
+  1605			      }								      }
+  1606			  }	  							  }	  
+  1607		  }								  }
+  1608		  else{ 							  else{ 
+  1609		          RemoveParticle( &N, i ); 				          RemoveParticle( &N, i ); 
+  1610			  i--;								  i--;
+  1611		  }								  }
+  1612		  // SB print positions				      <
+  1613		  fprintf(OF3P,"%g\t%d\t%f\t%f\n",		      <
+  1614	                  SimTime[UpdNum], IDs[i],X[i],Y[i]);	      <
+  1615	          fflush(OF3P);					      <
+  1616	  }								  }
+  1617	  								  
+  1618	
+  1619	  								  
+  1620	  /* 4 */							  /* 4 */
+  1621	
+  1622	  /* 4.1 */							  /* 4.1 */
+  1623	  E[UpdNum+1] = 0.0;						  E[UpdNum+1] = 0.0;
+  1624	  for(i=0;i<N;i++) {						  for(i=0;i<N;i++) {
+  1625	          E[UpdNum+1] += VX[i] * cos(Phi[i]) + VY[i] * sin(Ph	          E[UpdNum+1] += VX[i] * cos(Phi[i]) + VY[i] * sin(Ph
+  1626	  }								  }
+  1627	  if(N>0){ E[UpdNum+1] /= N; }					  if(N>0){ E[UpdNum+1] /= N; }
+  1628	
+  1629	
+  1630	  /* 4.2 */							  /* 4.2 */
+  1631	  for(i=0;i<N;i++){						  for(i=0;i<N;i++){
+  1632	          VX[i] = vxnew[i];					          VX[i] = vxnew[i];
+  1633	          VY[i] = vynew[i];					          VY[i] = vynew[i];
+  1634		  V[i] = sqrt(SQR(VX[i])+SQR(VY[i]));				  V[i] = sqrt(SQR(VX[i])+SQR(VY[i]));
+  1635		  Vdir[i] = atan2(VY[i],VX[i]);					  Vdir[i] = atan2(VY[i],VX[i]);
+  1636	          Phi[i] = DirectionOfExit( i );			          Phi[i] = DirectionOfExit( i );
+  1637	  }								  }
+  1638	
+  1639	
+  1640	  /* 4.3 */							  /* 4.3 */
+  1641	  SimTime[UpdNum+1] = SimTime[UpdNum] + tstep;			  SimTime[UpdNum+1] = SimTime[UpdNum] + tstep;
+  1642	  UpdNum++;							  UpdNum++;
+  1643	
+  1644	
+  1645	  /*								  /*
+  1646	if(NInjured>0){							if(NInjured>0){
+  1647	  fprintf(stdout,"t[%d]=%g\n",UpdNum,SimTime[UpdNum]);		  fprintf(stdout,"t[%d]=%g\n",UpdNum,SimTime[UpdNum]);
+  1648	  fflush(stdout);						  fflush(stdout);
+  1649	}								}
+  1650	*/								*/
+  1651	
+  1652	
+  1653	  /* 5 */							  /* 5 */
+  1654	  free_vector(fwallx,0,allocN-1);				  free_vector(fwallx,0,allocN-1);
+  1655	  free_vector(fwally,0,allocN-1);				  free_vector(fwally,0,allocN-1);
+  1656	  free_vector(fwpointx,0,allocN-1);				  free_vector(fwpointx,0,allocN-1);
+  1657	  free_vector(fwpointy,0,allocN-1);				  free_vector(fwpointy,0,allocN-1);
+  1658	  free_vector(fpairx,0,allocN-1);				  free_vector(fpairx,0,allocN-1);
+  1659	  free_vector(fpairy,0,allocN-1);				  free_vector(fpairy,0,allocN-1);
+  1660	  free_vector(fsmokex,0,allocN-1);				  free_vector(fsmokex,0,allocN-1);
+  1661	  free_vector(fsmokey,0,allocN-1);				  free_vector(fsmokey,0,allocN-1);
+  1662	
+  1663	  free_vector(fspx,0,allocN-1);					  free_vector(fspx,0,allocN-1);
+  1664	  free_vector(fspy,0,allocN-1);					  free_vector(fspy,0,allocN-1);
+  1665	  free_vector(fsumx,0,allocN-1);				  free_vector(fsumx,0,allocN-1);
+  1666	  free_vector(fsumy,0,allocN-1);				  free_vector(fsumy,0,allocN-1);
+  1667	  free_vector(vxnew,0,allocN-1);				  free_vector(vxnew,0,allocN-1);
+  1668	  free_vector(vynew,0,allocN-1);				  free_vector(vynew,0,allocN-1);
+  1669	  free_vector(ftmagsum,0,allocN-1);				  free_vector(ftmagsum,0,allocN-1);
+  1670	  free_vector(fcolx,0,allocN-1);				  free_vector(fcolx,0,allocN-1);
+  1671	  free_vector(fcoly,0,allocN-1);				  free_vector(fcoly,0,allocN-1);
+  1672	
+  1673	
+  1674	  /* 6 */							  /* 6 */
+  1675	}								}
+  1676	
+  1677	/*------------------------------*/				/*------------------------------*/
+  1678	
+  1679	float GaussRand( float gmean, float gtheta, float gcutmult ){	float GaussRand( float gmean, float gtheta, float gcutmult ){
+  1680	  /* generates a random number (x) with				  /* generates a random number (x) with
+  1681	     P(x) = exp[- (x-gmean)^2 / (2*gtheta)], if x is in 	     P(x) = exp[- (x-gmean)^2 / (2*gtheta)], if x is in 
+  1682	            [gmean - gcutmult*sqrt(gtheta), gmean + gcutmult*	            [gmean - gcutmult*sqrt(gtheta), gmean + gcutmult*
+  1683	          = 0                              , if not */		          = 0                              , if not */
+  1684	     								     
+  1685	  if( (GaussFlag==1) && (fabs(GaussSet2-gmean) <= gcutmult*sq	  if( (GaussFlag==1) && (fabs(GaussSet2-gmean) <= gcutmult*sq
+  1686	          GaussFlag = 0;					          GaussFlag = 0;
+  1687		  return GaussSet2;						  return GaussSet2;
+  1688	  }								  }
+  1689	  else {							  else {
+  1690	          float v1,v2,rsq,fac;					          float v1,v2,rsq,fac;
+  1691	
+  1692		  GaussFlag = 0;						  GaussFlag = 0;
+  1693		  do {								  do {
+  1694		          do {							          do {
+  1695			          v1 = 1.0 - 2.0*(rand()/(RAND_MAX+1.			          v1 = 1.0 - 2.0*(rand()/(RAND_MAX+1.
+  1696				  v2 = 1.0 - 2.0*(rand()/(RAND_MAX+1.				  v2 = 1.0 - 2.0*(rand()/(RAND_MAX+1.
+  1697			  } while((rsq=v1*v1+v2*v2) >= 1.0);				  } while((rsq=v1*v1+v2*v2) >= 1.0);
+  1698			  fac = sqrt(-2.0*gtheta*log(rsq)/rsq);				  fac = sqrt(-2.0*gtheta*log(rsq)/rsq);
+  1699			  GaussSet1 = v1*fac;						  GaussSet1 = v1*fac;
+  1700			  GaussSet2 = v2*fac;						  GaussSet2 = v2*fac;
+  1703	
+  1704		  if(fabs(GaussSet1-gmean) <= gcutmult*sqrt(gtheta)) 		  if(fabs(GaussSet1-gmean) <= gcutmult*sqrt(gtheta)) 
+  1705		          GaussFlag = 1;					          GaussFlag = 1;
+  1706			  return GaussSet1;						  return GaussSet1;
+  1707		  }								  }
+  1708		  else {							  else {
+  1709		          GaussFlag = 0;					          GaussFlag = 0;
+  1710			  return GaussSet2;						  return GaussSet2;
+  1711		  }								  }
+  1712	  } 								  } 
+  1713	} 								} 
+  1714	
+  1715	/*------------------------------*/				/*------------------------------*/
+  1716	
+  1717	float EMean( char* sw, int unfreq, float stfreq ) {		float EMean( char* sw, int unfreq, float stfreq ) {
+  1718	  /* calculates the mean value of the efficiency of the syste	  /* calculates the mean value of the efficiency of the syste
+  1719	     few update steps -- NOTE: use this function only when Up	     few update steps -- NOTE: use this function only when Up
+  1720	
+  1721	     if unfreq != 0, the average will be calculated for the l	     if unfreq != 0, the average will be calculated for the l
+  1722	     updates (the present one included)				     updates (the present one included)
+  1723	     if unfreq == 0, the average will be calculated for the s	     if unfreq == 0, the average will be calculated for the s
+  1724	     possible time interval exceeding stfreq */			     possible time interval exceeding stfreq */
+  1725	
+  1726	  int i, start;							  int i, start;
+  1727	  float e_mean, f;						  float e_mean, f;
+  1728	
+  1729	
+  1730	  if(strcmp(sw,"un")==0) { start = UpdNum - unfreq; }		  if(strcmp(sw,"un")==0) { start = UpdNum - unfreq; }
+  1731	  else /* i.e. if(strcmp(sw,"st")==0) */ { 			  else /* i.e. if(strcmp(sw,"st")==0) */ { 
+  1732	          start = Mb; /* start from beginning of present time	          start = Mb; /* start from beginning of present time
+  1733		  f = floor( SimTime[UpdNum] / stfreq );			  f = floor( SimTime[UpdNum] / stfreq );
+  1734		  while( f - floor( SimTime[start] / stfreq ) > 1.0 )		  while( f - floor( SimTime[start] / stfreq ) > 1.0 )
+  1735		  if( start==UpdNum ) { start--; }				  if( start==UpdNum ) { start--; }
+  1736	  }								  }
+  1737	  e_mean = 0.0;							  e_mean = 0.0;
+  1738	  for(i=start+1; i<=UpdNum; i++) {				  for(i=start+1; i<=UpdNum; i++) {
+  1739	          e_mean += E[i] * ( SimTime[i] - SimTime[i-1] );	          e_mean += E[i] * ( SimTime[i] - SimTime[i-1] );
+  1740	  }	  							  }	  
+  1741	  e_mean /= SimTime[UpdNum] - SimTime[start];			  e_mean /= SimTime[UpdNum] - SimTime[start];
+  1742	
+  1743	
+  1744	  e_mean /= V0; 						  e_mean /= V0; 
+  1745	  return e_mean;						  return e_mean;
+  1746	}								}
+  1747	
+  1748	
+  1749	/*==============================*/				/*==============================*/
+  1750	
+  1751	/*******************************/				/*******************************/
+  1752	#ifdef _FLAG_SD_C_						#ifdef _FLAG_SD_C_
+  1753	/*******************************/				/*******************************/
+  1754	
+  1755	void Start_Demo( int narg, char *argstr[] ){			void Start_Demo( int narg, char *argstr[] ){
+  1756	
+  1757	  /* standard start */						  /* standard start */
+  1758	  Start_Bare( narg, argstr );					  Start_Bare( narg, argstr );
+  1759	
+  1760	  /* additional start */					  /* additional start */
+  1761	  /* ... */							  /* ... */
+  1762	}								}
+  1763	
+  1764	/*--------------------------------------------------*/		/*--------------------------------------------------*/
+  1765	
+  1766	void Init_Demo(){						void Init_Demo(){
+  1767	  /* 1 general							  /* 1 general
+  1768	     2 special 							     2 special 
+  1769	     */								     */
+  1770	
+  1771	
+  1772	  _E("Initializing, please wait... \n"); 			  _E("Initializing, please wait... \n"); 
+  1773	
+  1774	
+  1775	  /* 1 */							  /* 1 */
+  1776	  Init_Bare("demo");						  Init_Bare("demo");
+  1777	
+  1778	
+  1779	
+  1780	  /* 2 */							  /* 2 */
+  1781	
+  1782	  /* opening files */						  /* opening files */
+  1783	  if(!(OFP=fopen(OFN,"w"))){					  if(!(OFP=fopen(OFN,"w"))){
+  1784	          fprintf(stderr,"sd_lib.c: Couldn't open %s for writ	          fprintf(stderr,"sd_lib.c: Couldn't open %s for writ
+  1785		  SD_LIB_EXIT;							  SD_LIB_EXIT;
+  1786	  }								  }
+  1787	  fprintf(OFP,"UpdNum, SimTime, N, <E>\n");			  fprintf(OFP,"UpdNum, SimTime, N, <E>\n");
+  1788	  fflush(OFP);							  fflush(OFP);
+  1789	
+  1790	  if(!(OF2P=fopen(OF2N,"w"))){					  if(!(OF2P=fopen(OF2N,"w"))){
+  1791	          fprintf(stderr,"sd_lib.c: Couldn't open %s for writ	          fprintf(stderr,"sd_lib.c: Couldn't open %s for writ
+  1792		  SD_LIB_EXIT;							  SD_LIB_EXIT;
+  1793	  }								  }
+  1794	  fprintf(OF2P,"\n");						  fprintf(OF2P,"\n");
+  1795	  fflush(OF2P);							  fflush(OF2P);
+  1796	
+  1797	  if(!(OF3P=fopen(OF3N,"w"))){				      |
+  1798	          fprintf(stderr,"sd_lib.c: Couldn't open %s for writ <
+  1799		  SD_LIB_EXIT;					      <
+  1800	  }							      <
+  1801	  fprintf(OF3P,"\n");					      <
+  1802	  fflush(OF3P);						      <
+  1803	
+  1804	  /* init visual or data output */				  /* init visual or data output */
+  1805	  switch(MainSwitch){						  switch(MainSwitch){
+  1806	  case 0: default: {						  case 0: default: {
+  1807	      X11_init();						      X11_init();
+  1808	      break;							      break;
+  1809	  }								  }
+  1810	  case 1:{							  case 1:{
+  1811	      Eps_init();						      Eps_init();
+  1812	      break;							      break;
+  1813	  }								  }
+  1814	  case 2:{							  case 2:{
+  1815	      Java_init();						      Java_init();
+  1816	      break;							      break;
+  1817	  }								  }
+  1818	  }								  }
+  1819	
+  1820	
+  1821	  _E("... finished.\n");					  _E("... finished.\n");
+  1822	}								}
+  1823	
+  1824	/*------------------------------*/				/*------------------------------*/
+  1825	
+  1826	void X11_init(){						void X11_init(){
+  1827	  int ii,last_ok;						  int ii,last_ok;
+  1828	  XColor sdef,edef;						  XColor sdef,edef;
+  1829	  								  
+  1830	
+  1831	  /* general */							  /* general */
+  1832	  X11_WWi = X11_InFW + (int)(X11_Magn*XS) + X11_Margin;		  X11_WWi = X11_InFW + (int)(X11_Magn*XS) + X11_Margin;
+  1833	  X11_WHe = (int)MAX( X11_InFH, X11_Magn*YS+X11_GrFH + 3*X11_	  X11_WHe = (int)MAX( X11_InFH, X11_Magn*YS+X11_GrFH + 3*X11_
+  1834	  g_win( "open", " self-driven", "sd", 0, 0, X11_WWi, X11_WHe	  g_win( "open", " self-driven", "sd", 0, 0, X11_WWi, X11_WHe
+  1835	  g_font( "open", X11_FontName );				  g_font( "open", X11_FontName );
+  1836	
+  1837	
+  1838	  /* colors */							  /* colors */
+  1839	  if( !XAllocNamedColor(display,cmap,BackGroundColorName,&ede	  if( !XAllocNamedColor(display,cmap,BackGroundColorName,&ede
+  1840	      fprintf(stderr,"Error: couldn't allocate color: %s\n",	      fprintf(stderr,"Error: couldn't allocate color: %s\n",
+  1841		      BackGroundColorName);					      BackGroundColorName);
+  1842	      SD_LIB_EXIT;						      SD_LIB_EXIT;
+  1843	  }								  }
+  1844	  BGCCode = sdef.pixel;						  BGCCode = sdef.pixel;
+  1845	
+  1846	  if( !XAllocNamedColor(display,cmap,InfoColorName,&edef,&sde	  if( !XAllocNamedColor(display,cmap,InfoColorName,&edef,&sde
+  1847	      fprintf(stderr,"Error: couldn't allocate color: %s\n",I	      fprintf(stderr,"Error: couldn't allocate color: %s\n",I
+  1848	      SD_LIB_EXIT;						      SD_LIB_EXIT;
+  1849	  }								  }
+  1850	  ICCode = sdef.pixel;						  ICCode = sdef.pixel;
+  1851		  								  
+  1852	
+  1853	  PaCNum = sizeof(ParticleColorName)/sizeof(char*);		  PaCNum = sizeof(ParticleColorName)/sizeof(char*);
+  1854	  PaCCode = ivector(0,PaCNum-1);				  PaCCode = ivector(0,PaCNum-1);
+  1855	  for(ii=0,last_ok=0;ii<PaCNum;ii++){				  for(ii=0,last_ok=0;ii<PaCNum;ii++){
+  1856	      if( !XAllocNamedColor(display,cmap,ParticleColorName[ii	      if( !XAllocNamedColor(display,cmap,ParticleColorName[ii
+  1857		  fprintf(stderr,"WARNING: couldn't allocate color: %		  fprintf(stderr,"WARNING: couldn't allocate color: %
+  1858			  ParticleColorName[ii]);					  ParticleColorName[ii]);
+  1859		  fprintf(stderr,"Using %s instead\n",ParticleColorNa		  fprintf(stderr,"Using %s instead\n",ParticleColorNa
+  1860		  PaCCode[ii]=PaCCode[last_ok];					  PaCCode[ii]=PaCCode[last_ok];
+  1861	      }								      }
+  1862	      else{							      else{
+  1863		  PaCCode[ii] = sdef.pixel;					  PaCCode[ii] = sdef.pixel;
+  1864		  last_ok=ii;							  last_ok=ii;
+  1865	      }								      }
+  1866	  }								  }
+  1867	}								}
+  1868	
+  1869	/*------------------------------------------*/			/*------------------------------------------*/
+  1870	
+  1871	void Eps_init(){						void Eps_init(){
+  1872	  XColor edef;							  XColor edef;
+  1873	  int ii;							  int ii;
+  1874	
+  1875	
+  1876	  EpsMagn = MIN( (EpsXS-2.0*EpsMinXMarg-EpsInFW)/XS,		  EpsMagn = MIN( (EpsXS-2.0*EpsMinXMarg-EpsInFW)/XS,
+  1877	 	         (EpsYS-2.0*EpsMinYMarg)/YS			 	         (EpsYS-2.0*EpsMinYMarg)/YS
+  1878		       );							       );
+  1879	  EpsXMarg = 0.5*(EpsXS-EpsMagn*XS-EpsInFW);			  EpsXMarg = 0.5*(EpsXS-EpsMagn*XS-EpsInFW);
+  1880	  EpsYMarg = 0.5*(EpsYS-EpsMagn*YS);				  EpsYMarg = 0.5*(EpsYS-EpsMagn*YS);
+  1881	  Eps_iPF = Eps_iPF_first;					  Eps_iPF = Eps_iPF_first;
+  1882	
+  1883	
+  1884	  /* using X11 for a short time here (just for the color code	  /* using X11 for a short time here (just for the color code
+  1885	  g_win( "open", " self-driven", "sd", 0, 0, 50, 50, 4);	  g_win( "open", " self-driven", "sd", 0, 0, 50, 50, 4);
+  1886	  g_font( "open", X11_FontName );				  g_font( "open", X11_FontName );
+  1887	
+  1888	  PaCNum = sizeof(ParticleColorName)/sizeof(char*);		  PaCNum = sizeof(ParticleColorName)/sizeof(char*);
+  1889	  XLookupColor(display,cmap,BackGroundColorName,&edef,&BGC_sd	  XLookupColor(display,cmap,BackGroundColorName,&edef,&BGC_sd
+  1890	  XLookupColor(display,cmap,InfoColorName,&edef,&IC_sdef);	  XLookupColor(display,cmap,InfoColorName,&edef,&IC_sdef);
+  1891	  for(ii=0;ii<PaCNum;ii++){					  for(ii=0;ii<PaCNum;ii++){
+  1892	      XLookupColor(display,cmap,ParticleColorName[ii],&edef,&	      XLookupColor(display,cmap,ParticleColorName[ii],&edef,&
+  1893	  }								  }
+  1894	  XLookupColor(display,cmap,SmokeColorName,&edef,&SmokeColor_	  XLookupColor(display,cmap,SmokeColorName,&edef,&SmokeColor_
+  1895	
+  1896	
+  1897	  /* closing X11 */						  /* closing X11 */
+  1898	  /* don't... the program stops, if you do this */		  /* don't... the program stops, if you do this */
+  1899	  /*								  /*
+  1900	  g_win( "close", " self-driven", "sd", 0, 0, 50, 50, 4);	  g_win( "close", " self-driven", "sd", 0, 0, 50, 50, 4);
+  1901	  g_font( "close", X11_FontName );				  g_font( "close", X11_FontName );
+  1902	  */								  */
+  1903	}								}
+  1904	
+  1905	/*------------------------------------------*/			/*------------------------------------------*/
+  1906	
+  1907	void Java_init(){						void Java_init(){
+  1908	
+  1909	  JavaXMarg=10;							  JavaXMarg=10;
+  1910	  JavaYMarg=10;							  JavaYMarg=10;
+  1911	  JavaMagn = MIN((JavaXS-20.0)/XS,(JavaYS-20.0)/YS);		  JavaMagn = MIN((JavaXS-20.0)/XS,(JavaYS-20.0)/YS);
+  1912	  JavaImInd = 1;						  JavaImInd = 1;
+  1913	  JavaNTStep = 1 + (int)ceil(JavaMaxTime/JavaTStep);		  JavaNTStep = 1 + (int)ceil(JavaMaxTime/JavaTStep);
+  1914	fprintf(stderr,"XS,YS,M,XM,YM=%g,%g,%g,%d,%d\n",XS,YS,JavaMag	fprintf(stderr,"XS,YS,M,XM,YM=%g,%g,%g,%d,%d\n",XS,YS,JavaMag
+  1915	
+  1916	  JavaXlo=imatrix(1,N0,1,JavaNTStep);				  JavaXlo=imatrix(1,N0,1,JavaNTStep);
+  1917	  JavaXhi=imatrix(1,N0,1,JavaNTStep);				  JavaXhi=imatrix(1,N0,1,JavaNTStep);
+  1918	  JavaYlo=imatrix(1,N0,1,JavaNTStep);				  JavaYlo=imatrix(1,N0,1,JavaNTStep);
+  1919	  JavaYhi=imatrix(1,N0,1,JavaNTStep);				  JavaYhi=imatrix(1,N0,1,JavaNTStep);
+  1920	  JavaC=imatrix(1,N0,1,JavaNTStep);				  JavaC=imatrix(1,N0,1,JavaNTStep);
+  1921	  JavaD=imatrix(1,N0,1,JavaNTStep);				  JavaD=imatrix(1,N0,1,JavaNTStep);
+  1922	}								}
+  1923	
+  1924	/*------------------------------------------*/			/*------------------------------------------*/
+  1925	
+  1926	void Pic(){							void Pic(){
+  1927	
+  1928	    if(  (UpdNum==0)						    if(  (UpdNum==0)
+  1929	       ||(  (UpdNum>0) 	 					       ||(  (UpdNum>0) 	 
+  1930	          &&(  (  (DrawUN != 0)					          &&(  (  (DrawUN != 0)
+  1931		        &&(UpdNum % DrawUN == 0)  				        &&(UpdNum % DrawUN == 0)  
+  1932		       )							       )
+  1933	             ||(  (DrawUN == 0)					             ||(  (DrawUN == 0)
+  1934		        &&(   floor( SimTime[UpdNum] / DrawST )			        &&(   floor( SimTime[UpdNum] / DrawST )
+  1935			    > floor( SimTime[UpdNum-1] / DrawST )			    > floor( SimTime[UpdNum-1] / DrawST )
+  1936		          )     						          )     
+  1937		       )							       )
+  1938		    ) 								    ) 
+  1939		 )								 )
+  1940	      ) {							      ) {
+  1941	            switch(MainSwitch){					            switch(MainSwitch){
+  1942		    case 0: default: {						    case 0: default: {
+  1943		            X11_Pic();						            X11_Pic();
+  1944			    break;							    break;
+  1945		    }								    }
+  1946		    case 1: {							    case 1: {
+  1947		            Eps_Pic();						            Eps_Pic();
+  1948			    break;							    break;
+  1949		    }								    }
+  1950		    }								    }
+  1951	    }								    }
+  1952	}								}
+  1953	
+  1954	/*------------------------------*/				/*------------------------------*/
+  1955	
+  1956	void X11_Pic(){							void X11_Pic(){
+  1957	  /* 1 cleaning the whole window				  /* 1 cleaning the whole window
+  1958	     2 drawing particles (smoke front, column)			     2 drawing particles (smoke front, column)
+  1959	     3 walls							     3 walls
+  1960	     4 cleaning the info surface, drawing info 			     4 cleaning the info surface, drawing info 
+  1961	     5 showing it, time delay					     5 showing it, time delay
+  1962	     */								     */
+  1963	
+  1964	  int i,disp_height;						  int i,disp_height;
+  1965	  char disp_str[MY_STRLEN];					  char disp_str[MY_STRLEN];
+  1966	  /*  float pmean;*/						  /*  float pmean;*/
+  1967	  float x;							  float x;
+  1968	
+  1969	
+  1970	  /* 1 */							  /* 1 */
+  1971	  XSetForeground( display, gc, BGCCode );			  XSetForeground( display, gc, BGCCode );
+  1972	  XFillRectangle( display, pix1, gc, 0, 0, X11_WWi, X11_WHe )	  XFillRectangle( display, pix1, gc, 0, 0, X11_WWi, X11_WHe )
+  1973	
+  1974	
+  1975	  /* 2 */							  /* 2 */
+  1976	  for(i=0;i<N;i++){						  for(i=0;i<N;i++){
+  1977		  XDrawParticle( i, X11_InFW, X11_Margin, X11_Magn); 		  XDrawParticle( i, X11_InFW, X11_Margin, X11_Magn); 
+  1978	  }								  }
+  1979	  								  
+  1980	
+  1981	
+  1982	  /* 2.B */							  /* 2.B */
+  1983	  /* smoke front, if needed */					  /* smoke front, if needed */
+  1984	  if(  ((InjurySwitch==2)||(InjurySwitch==3))			  if(  ((InjurySwitch==2)||(InjurySwitch==3))
+  1985	     &&(SimTime[UpdNum]>=SmokeStartTime)){			     &&(SimTime[UpdNum]>=SmokeStartTime)){
+  1986	      XSetForeground( display, gc, ICCode );			      XSetForeground( display, gc, ICCode );
+  1987	      x =   X11_InFW + X11_Magn*(SimTime[UpdNum]-SmokeStartTi	      x =   X11_InFW + X11_Magn*(SimTime[UpdNum]-SmokeStartTi
+  1988	      for(i=0;i<=X11_Magn*YS/6.0;i++) { 			      for(i=0;i<=X11_Magn*YS/6.0;i++) { 
+  1989		  XDrawLine(display, pix1, gc, 					  XDrawLine(display, pix1, gc, 
+  1990			    x, X11_Margin + 6*i,					    x, X11_Margin + 6*i,
+  1991			    x, X11_Margin + 6*i+3					    x, X11_Margin + 6*i+3
+  1992			   ); 								   ); 
+  1993	      }								      }
+  1994	  }								  }
+  1995	
+  1996	  /* 2.C */							  /* 2.C */
+  1997	  /* column */							  /* column */
+  1998	  switch(ColumnSwitch){						  switch(ColumnSwitch){
+  1999	  default: case 0:{ break; }					  default: case 0:{ break; }
+  2000	  case 1:{							  case 1:{
+  2001	          XSetForeground( display, gc, ICCode );          	          XSetForeground( display, gc, ICCode );          
+  2002		  XDrawArc(display, pix1, gc,					  XDrawArc(display, pix1, gc,
+  2003			   (int)floor(X11_InFW+X11_Magn*(ColumnCenter			   (int)floor(X11_InFW+X11_Magn*(ColumnCenter
+  2004			   (int)floor(X11_Margin+X11_Magn*(ColumnCent			   (int)floor(X11_Margin+X11_Magn*(ColumnCent
+  2005			   (int)floor(X11_Magn*ColumnD),				   (int)floor(X11_Magn*ColumnD),
+  2006			   (int)floor(X11_Magn*ColumnD),				   (int)floor(X11_Magn*ColumnD),
+  2007			   0, 23040		   					   0, 23040		   
+  2008			  );								  );
+  2009		  break;							  break;
+  2010	  }								  }
+  2011	  }								  }
+  2012	
+  2013	
+  2014	
+  2015	  /* 3 */							  /* 3 */
+  2016	  XSetForeground( display, gc, ICCode );			  XSetForeground( display, gc, ICCode );
+  2017	  for(i=0;i<NW;i++){						  for(i=0;i<NW;i++){
+  2018	          XDrawLine(display,pix1,gc,				          XDrawLine(display,pix1,gc,
+  2019			    (int)floor(X11_InFW+X11_Magn*W[i].x1),			    (int)floor(X11_InFW+X11_Magn*W[i].x1),
+  2020			    (int)floor(X11_Margin+X11_Magn*W[i].y1),			    (int)floor(X11_Margin+X11_Magn*W[i].y1),
+  2021			    (int)floor(X11_InFW+X11_Magn*W[i].x2),			    (int)floor(X11_InFW+X11_Magn*W[i].x2),
+  2022			    (int)floor(X11_Margin+X11_Magn*W[i].y2)			    (int)floor(X11_Margin+X11_Magn*W[i].y2)
+  2023			   );								   );
+  2024	  }								  }
+  2025	
+  2026	
+  2027	
+  2028	
+  2029	
+  2030	  /* 4 */							  /* 4 */
+  2031	  XSetForeground( display, gc, BGCCode );			  XSetForeground( display, gc, BGCCode );
+  2032	
+  2033	  /* cleaning the x=XS end of the field to allow particles 	  /* cleaning the x=XS end of the field to allow particles 
+  2034	     leave the screen gradually */				     leave the screen gradually */
+  2035	  XFillRectangle( display, pix1, gc, 				  XFillRectangle( display, pix1, gc, 
+  2036			  (int)floor(X11_InFW+X11_Magn*XS), 0, 				  (int)floor(X11_InFW+X11_Magn*XS), 0, 
+  2037			  (int)floor(X11_WWi-X11_InFW-X11_Magn*XS), X			  (int)floor(X11_WWi-X11_InFW-X11_Magn*XS), X
+  2038	
+  2039	  /* writing info */						  /* writing info */
+  2040	  XSetForeground( display, gc, ICCode );			  XSetForeground( display, gc, ICCode );
+  2041	  disp_height = X11_Margin + X11_TLH;				  disp_height = X11_Margin + X11_TLH;
+  2042	
+  2043	  disp_height += X11_TLH;					  disp_height += X11_TLH;
+  2044	  sprintf( disp_str, "t [%6d] = %.1f", UpdNum, SimTime[UpdNum	  sprintf( disp_str, "t [%6d] = %.1f", UpdNum, SimTime[UpdNum
+  2045	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 
+  2046		       disp_str, (signed int)strlen(disp_str) );		       disp_str, (signed int)strlen(disp_str) );
+  2047	
+  2048	  disp_height += X11_TLH;					  disp_height += X11_TLH;
+  2049	  sprintf( disp_str, "N (in room) = %d", NInRoom );		  sprintf( disp_str, "N (in room) = %d", NInRoom );
+  2050	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 
+  2051		       disp_str, (signed int)strlen(disp_str) );		       disp_str, (signed int)strlen(disp_str) );
+  2052	
+  2053	  disp_height += X11_TLH;					  disp_height += X11_TLH;
+  2054	  sprintf( disp_str, "N_injured = %d", NInjured );		  sprintf( disp_str, "N_injured = %d", NInjured );
+  2055	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 
+  2056		       disp_str, (signed int)strlen(disp_str) );		       disp_str, (signed int)strlen(disp_str) );
+  2057	
+  2058	  disp_height += X11_TLH;					  disp_height += X11_TLH;
+  2059	  sprintf( disp_str, "V0 = %g", V0 );				  sprintf( disp_str, "V0 = %g", V0 );
+  2060	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 
+  2061		       disp_str, (signed int)strlen(disp_str) );		       disp_str, (signed int)strlen(disp_str) );
+  2062	
+  2063	  disp_height += X11_TLH;					  disp_height += X11_TLH;
+  2064	  sprintf( disp_str, "FWall_x = %.2f", FW_x );			  sprintf( disp_str, "FWall_x = %.2f", FW_x );
+  2065	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 	  XDrawString( display, pix1, gc, X11_Margin, disp_height, 
+  2066		       disp_str, (signed int)strlen(disp_str) );		       disp_str, (signed int)strlen(disp_str) );
+  2067	
+  2068	
+  2069	
+  2070	  /* 5 */							  /* 5 */
+  2071	  h_show(X11_WWi,X11_WHe);					  h_show(X11_WWi,X11_WHe);
+  2072	  sleep(Sleep);							  sleep(Sleep);
+  2073	}								}
+  2074	
+  2075	/*------------------------------*/				/*------------------------------*/
+  2076	
+  2077	void EpsDrawParticle( FILE* fp, int i ) {			void EpsDrawParticle( FILE* fp, int i ) {
+  2078	  /* putting particle i onto the eps image 			  /* putting particle i onto the eps image 
+  2079	    pm: picture magnification					    pm: picture magnification
+  2080	    */								    */
+  2081	  								  
+  2082	  float theta,v,x,y,vx,vy,d,magn,lxm,uym;			  float theta,v,x,y,vx,vy,d,magn,lxm,uym;
+  2083	
+  2084	
+  2085	  theta = atan2(vy,vx); 					  theta = atan2(vy,vx); 
+  2086	  v = sqrt(SQR(vx)+SQR(vy));					  v = sqrt(SQR(vx)+SQR(vy));
+  2087	  x = X[i];							  x = X[i];
+  2088	  y=Y[i];							  y=Y[i];
+  2089	  vx=VX[i];							  vx=VX[i];
+  2090	  vy=VY[i];							  vy=VY[i];
+  2091	  d=D[i]; 							  d=D[i]; 
+  2092	  lxm = EpsXMarg + EpsInFW;					  lxm = EpsXMarg + EpsInFW;
+  2093	  uym = EpsYMarg;						  uym = EpsYMarg;
+  2094	  magn = EpsMagn;						  magn = EpsMagn;
+  2095	
+  2096	
+  2097	
+  2098	  /* drawing particle */					  /* drawing particle */
+  2099	  switch( Draw ) {						  switch( Draw ) {
+  2100	  default: case 0: {						  default: case 0: {
+  2101	
+  2102	          d = D[i];						          d = D[i];
+  2103		  x = X[i];							  x = X[i];
+  2104		  y = Y[i];							  y = Y[i];
+  2105	
+  2106	          EpsFillCircle( fp,					          EpsFillCircle( fp,
+  2107				 lxm + magn * x,          					 lxm + magn * x,          
+  2108				 uym + magn * y, 						 uym + magn * y, 
+  2109				 0.5*magn*d							 0.5*magn*d
+  2110			       );							       );
+  2111		  break;							  break;
+  2112	  }								  }
+  2113	  case 1: {							  case 1: {
+  2114	
+  2115	          d = D[i];						          d = D[i];
+  2116		  x = X[i];							  x = X[i];
+  2117		  y = Y[i];							  y = Y[i];
+  2118	
+  2119	          EpsFillCircle( fp,					          EpsFillCircle( fp,
+  2120				 lxm + magn * x,          					 lxm + magn * x,          
+  2121				 uym + magn * y, 						 uym + magn * y, 
+  2122				 0.5*magn*d							 0.5*magn*d
+  2123			       );							       );
+  2124		  EpsSetRgb( fp, 						  EpsSetRgb( fp, 
+  2125			     (double)(IC_sdef.red), 					     (double)(IC_sdef.red), 
+  2126			     (double)(IC_sdef.green), 					     (double)(IC_sdef.green), 
+  2127			     (double)(IC_sdef.blue) 					     (double)(IC_sdef.blue) 
+  2128			   );	      							   );	      
+  2129		  if(EpsLineWidth>0.0){						  if(EpsLineWidth>0.0){
+  2130		      EpsSetLinewidth( fp, EpsLineWidth );			      EpsSetLinewidth( fp, EpsLineWidth );
+  2131		      EpsDrawCircle( fp,					      EpsDrawCircle( fp,
+  2132				     lxm + magn * x,          					     lxm + magn * x,          
+  2133				     uym + magn * y, 						     uym + magn * y, 
+  2134				     0.5*magn*d							     0.5*magn*d
+  2135				   );								   );
+  2136		  }								  }
+  2137		  break;							  break;
+  2138	  }								  }
+  2139	  case 2: {							  case 2: {
+  2140	
+  2141	          d = DrawDMult * D[i];					          d = DrawDMult * D[i];
+  2142		  x = X[i];							  x = X[i];
+  2143		  y = Y[i];							  y = Y[i];
+  2144	
+  2145	          EpsFillCircle( fp,					          EpsFillCircle( fp,
+  2146				 lxm + magn * x,          					 lxm + magn * x,          
+  2147				 uym + magn * y, 						 uym + magn * y, 
+  2148				 0.5*magn*d							 0.5*magn*d
+  2149			       );							       );
+  2150		  EpsSetRgb( fp, 						  EpsSetRgb( fp, 
+  2151			     (double)(IC_sdef.red), 					     (double)(IC_sdef.red), 
+  2152			     (double)(IC_sdef.green), 					     (double)(IC_sdef.green), 
+  2153			     (double)(IC_sdef.blue) 					     (double)(IC_sdef.blue) 
+  2154			   );	      							   );	      
+  2155		  if(EpsLineWidth>0.0){						  if(EpsLineWidth>0.0){
+  2156		      EpsSetLinewidth( fp, EpsLineWidth );			      EpsSetLinewidth( fp, EpsLineWidth );
+  2157		      EpsDrawCircle( fp,					      EpsDrawCircle( fp,
+  2158				     lxm + magn * x,          					     lxm + magn * x,          
+  2159				     uym + magn * y, 						     uym + magn * y, 
+  2160				     0.5*magn*d							     0.5*magn*d
+  2161				   );								   );
+  2162		  }								  }
+  2163		  break;							  break;
+  2164	  }								  }
+  2165	  }								  }
+  2166	}								}
+  2167	
+  2168	/*--------------------------------------*/			/*--------------------------------------*/
+  2169	
+  2170	void Eps_Pic(){							void Eps_Pic(){
+  2171	  /* writing the current configuration in eps format into Eps	  /* writing the current configuration in eps format into Eps
+  2172	     files (identical copies) */				     files (identical copies) */
+  2173	
+  2174	  int ii,i;							  int ii,i;
+  2175	  float lw,disp_height,x_smokefront;				  float lw,disp_height,x_smokefront;
+  2176	  char fn[MY_STRLEN],sh_com[MY_STRLEN],disp_str[MY_STRLEN];	  char fn[MY_STRLEN],sh_com[MY_STRLEN],disp_str[MY_STRLEN];
+  2177	  FILE *fp;							  FILE *fp;
+  2178	
+  2179	
+  2180	
+  2181	  /* 1 opening file */						  /* 1 opening file */
+  2182	  sprintf(fn,"sd.%d.eps",Eps_iPF);				  sprintf(fn,"sd.%d.eps",Eps_iPF);
+  2183	  if(!(fp=fopen(fn,"w"))){					  if(!(fp=fopen(fn,"w"))){
+  2184	      fprintf(stderr,"sd_lib.c: Couldn't open %s for writing.	      fprintf(stderr,"sd_lib.c: Couldn't open %s for writing.
+  2185	      SD_LIB_EXIT;						      SD_LIB_EXIT;
+  2186	  }								  }
+  2187	  fprintf(stdout,"Writing %s...\n",fn);				  fprintf(stdout,"Writing %s...\n",fn);
+  2188	  								  
+  2189	
+  2190	  /* 2 init and background */					  /* 2 init and background */
+  2191	  EpsInit( fp, 0, 0, EpsXS-1, EpsYS-1 );			  EpsInit( fp, 0, 0, EpsXS-1, EpsYS-1 );
+  2192	  EpsSetFont( fp, "Times-Bold", EpsInTH );			  EpsSetFont( fp, "Times-Bold", EpsInTH );
+  2193	  EpsSetRgb( fp, BGC_sdef.red, BGC_sdef.green,			  EpsSetRgb( fp, BGC_sdef.red, BGC_sdef.green,
+  2194		     BGC_sdef.blue );						     BGC_sdef.blue );
+  2195	  EpsFillRectangle( fp, 0, 0, EpsXS, EpsYS );			  EpsFillRectangle( fp, 0, 0, EpsXS, EpsYS );
+  2196	
+  2197	  								  
+  2198	
+  2199	  /* 2b smoke, if needed */					  /* 2b smoke, if needed */
+  2200	  if((InjurySwitch==2)||(InjurySwitch==3)){			  if((InjurySwitch==2)||(InjurySwitch==3)){
+  2201	      if(SimTime[UpdNum]>=SmokeStartTime){			      if(SimTime[UpdNum]>=SmokeStartTime){
+  2202		  x_smokefront = (SimTime[UpdNum]-SmokeStartTime)*VSm		  x_smokefront = (SimTime[UpdNum]-SmokeStartTime)*VSm
+  2203	      								      
+  2204		  EpsSetRgb( fp, 						  EpsSetRgb( fp, 
+  2205			     SmokeColor_sdef.red,					     SmokeColor_sdef.red,
+  2206			     SmokeColor_sdef.green,					     SmokeColor_sdef.green,
+  2207			     SmokeColor_sdef.blue					     SmokeColor_sdef.blue
+  2208			   );								   );
+  2209		  EpsFillRectangle( fp, 					  EpsFillRectangle( fp, 
+  2210				    EpsXMarg+EpsInFW, 						    EpsXMarg+EpsInFW, 
+  2211				    EpsYMarg, 							    EpsYMarg, 
+  2212				    EpsXMarg+EpsInFW+EpsMagn*x_smokef				    EpsXMarg+EpsInFW+EpsMagn*x_smokef
+  2213				    EpsYMarg+EpsMagn*RoomYSize					    EpsYMarg+EpsMagn*RoomYSize
+  2214				  );								  );
+  2215	      }								      }
+  2216	  }								  }
+  2217	
+  2218	
+  2219	
+  2220	
+  2221	  /* 3 particles */						  /* 3 particles */
+  2222	
+  2223	  /* 3a: not injured */						  /* 3a: not injured */
+  2224	  EpsSetRgb( fp,  						  EpsSetRgb( fp,  
+  2225		     (double)(PC_sdef[0].red), 					     (double)(PC_sdef[0].red), 
+  2226		     (double)(PC_sdef[0].green), 				     (double)(PC_sdef[0].green), 
+  2227		     (double)(PC_sdef[0].blue)					     (double)(PC_sdef[0].blue)
+  2228		   );	      							   );	      
+  2229	  for(i=0;i<N;i++){ 						  for(i=0;i<N;i++){ 
+  2230	      if(Injured[i]==0){					      if(Injured[i]==0){
+  2231		  EpsDrawParticle( fp, i ); 					  EpsDrawParticle( fp, i ); 
+  2232	      }								      }
+  2233	  }								  }
+  2234	
+  2235	  /* 3b: injured */						  /* 3b: injured */
+  2236	  EpsSetRgb( fp,  						  EpsSetRgb( fp,  
+  2237		     (double)(PC_sdef[1].red), 					     (double)(PC_sdef[1].red), 
+  2238		     (double)(PC_sdef[1].green), 				     (double)(PC_sdef[1].green), 
+  2239		     (double)(PC_sdef[1].blue)					     (double)(PC_sdef[1].blue)
+  2240		   );	      							   );	      
+  2241	  for(i=0;i<N;i++){ 						  for(i=0;i<N;i++){ 
+  2242	      if(Injured[i]==1){					      if(Injured[i]==1){
+  2243		  EpsDrawParticle( fp, i ); 					  EpsDrawParticle( fp, i ); 
+  2244	      }								      }
+  2245	  }								  }
+  2246	
+  2247	
+  2248	
+  2249	  /* 4 drawing walls */						  /* 4 drawing walls */
+  2250	  EpsSetRgb( fp, IC_sdef.red, IC_sdef.green, IC_sdef.blue );	  EpsSetRgb( fp, IC_sdef.red, IC_sdef.green, IC_sdef.blue );
+  2251	  EpsSetLinewidth( fp, 0.0 );					  EpsSetLinewidth( fp, 0.0 );
+  2252	  lw = EpsMagn*0.5*WallWidth;					  lw = EpsMagn*0.5*WallWidth;
+  2253	  EpsFillRectangle( fp, 					  EpsFillRectangle( fp, 
+  2254			    EpsXMarg+EpsInFW-lw,					    EpsXMarg+EpsInFW-lw,
+  2255			    EpsYMarg-lw,						    EpsYMarg-lw,
+  2256			    EpsXMarg+EpsInFW,						    EpsXMarg+EpsInFW,
+  2257			    EpsYMarg+EpsMagn*YS+lw					    EpsYMarg+EpsMagn*YS+lw
+  2258			  );								  );
+  2259	  EpsFillRectangle( fp, 					  EpsFillRectangle( fp, 
+  2260			    EpsXMarg+EpsInFW-lw,					    EpsXMarg+EpsInFW-lw,
+  2261			    EpsYMarg-lw,						    EpsYMarg-lw,
+  2262			    EpsXMarg+EpsInFW+EpsMagn*XS,				    EpsXMarg+EpsInFW+EpsMagn*XS,
+  2263			    EpsYMarg							    EpsYMarg
+  2264			  );								  );
+  2265	  EpsFillRectangle( fp, 					  EpsFillRectangle( fp, 
+  2266			    EpsXMarg+EpsInFW-lw,					    EpsXMarg+EpsInFW-lw,
+  2267			    EpsYMarg+EpsMagn*YS,					    EpsYMarg+EpsMagn*YS,
+  2268			    EpsXMarg+EpsInFW+EpsMagn*XS,				    EpsXMarg+EpsInFW+EpsMagn*XS,
+  2269			    EpsYMarg+EpsMagn*YS+lw					    EpsYMarg+EpsMagn*YS+lw
+  2270			  );								  );
+  2271	  EpsFillRectangle( fp, 					  EpsFillRectangle( fp, 
+  2272			    EpsXMarg+EpsInFW+EpsMagn*RoomXSize,				    EpsXMarg+EpsInFW+EpsMagn*RoomXSize,
+  2273			    EpsYMarg-lw,						    EpsYMarg-lw,
+  2274			    EpsXMarg+EpsInFW+EpsMagn*(RoomXSize+WallW			    EpsXMarg+EpsInFW+EpsMagn*(RoomXSize+WallW
+  2275			    EpsYMarg+EpsMagn*0.5*(RoomYSize-DoorWidth			    EpsYMarg+EpsMagn*0.5*(RoomYSize-DoorWidth
+  2276			  );								  );
+  2277	  EpsFillRectangle( fp, 					  EpsFillRectangle( fp, 
+  2278			    EpsXMarg+EpsInFW+EpsMagn*RoomXSize,				    EpsXMarg+EpsInFW+EpsMagn*RoomXSize,
+  2279			    EpsYMarg+EpsMagn*0.5*(RoomYSize+DoorWidth			    EpsYMarg+EpsMagn*0.5*(RoomYSize+DoorWidth
+  2280			    EpsXMarg+EpsInFW+EpsMagn*(RoomXSize+WallW			    EpsXMarg+EpsInFW+EpsMagn*(RoomXSize+WallW
+  2281			    EpsYMarg+EpsMagn*RoomYSize+lw				    EpsYMarg+EpsMagn*RoomYSize+lw
+  2282			  );								  );
+  2283	
+  2284	  /* drawing column, if needed */				  /* drawing column, if needed */
+  2285	  if(ColumnSwitch==1){						  if(ColumnSwitch==1){
+  2286	          EpsSetRgb( fp, IC_sdef.red, IC_sdef.green, IC_sdef.	          EpsSetRgb( fp, IC_sdef.red, IC_sdef.green, IC_sdef.
+  2287	          EpsFillCircle( fp,					          EpsFillCircle( fp,
+  2288				 EpsXMarg+EpsInFW+EpsMagn*ColumnCente				 EpsXMarg+EpsInFW+EpsMagn*ColumnCente
+  2289				 EpsYMarg+EpsMagn*ColumnCenterY,				 EpsYMarg+EpsMagn*ColumnCenterY,
+  2290				 0.5*EpsMagn*ColumnD						 0.5*EpsMagn*ColumnD
+  2291			       );							       );
+  2292	  }								  }
+  2293	
+  2294	
+  2295	
+  2296	
+  2297	
+  2298	  /* 5 removing rubbish from outer rim */			  /* 5 removing rubbish from outer rim */
+  2299	  EpsSetRgb( fp, BGC_sdef.red, BGC_sdef.green, BGC_sdef.blue 	  EpsSetRgb( fp, BGC_sdef.red, BGC_sdef.green, BGC_sdef.blue 
+  2300	  EpsFillRectangle( fp, 					  EpsFillRectangle( fp, 
+  2301			    EpsXMarg+EpsInFW+EpsMagn*XS,				    EpsXMarg+EpsInFW+EpsMagn*XS,
+  2302			    EpsYMarg,							    EpsYMarg,
+  2303			    EpsXS,							    EpsXS,
+  2304			    EpsYMarg+EpsMagn*YS						    EpsYMarg+EpsMagn*YS
+  2305			  );								  );
+  2306	
+  2307	
+  2308	  /* 6 text */							  /* 6 text */
+  2309	  EpsSetRgb( fp, IC_sdef.red, IC_sdef.green, IC_sdef.blue ); 	  EpsSetRgb( fp, IC_sdef.red, IC_sdef.green, IC_sdef.blue ); 
+  2310	  sprintf( disp_str,"t = %d", (int)floor(SimTime[UpdNum]) );	  sprintf( disp_str,"t = %d", (int)floor(SimTime[UpdNum]) );
+  2311	  disp_height = EpsYS - (EpsYMarg + 1.2*EpsInTH);		  disp_height = EpsYS - (EpsYMarg + 1.2*EpsInTH);
+  2312	  EpsDrawString( fp, 0.0, EpsXMarg, disp_height, disp_str );	  EpsDrawString( fp, 0.0, EpsXMarg, disp_height, disp_str );
+  2313	  								  
+  2314	  disp_height -= 1.2*EpsInTH;					  disp_height -= 1.2*EpsInTH;
+  2315	  sprintf( disp_str, "N = %d", NInRoom );			  sprintf( disp_str, "N = %d", NInRoom );
+  2316	  EpsDrawString( fp, 0.0, EpsXMarg, disp_height, disp_str );	  EpsDrawString( fp, 0.0, EpsXMarg, disp_height, disp_str );
+  2317	
+  2318	  disp_height -= 1.2*EpsInTH;					  disp_height -= 1.2*EpsInTH;
+  2319	  sprintf( disp_str, "V0 = %g", V0 );				  sprintf( disp_str, "V0 = %g", V0 );
+  2320	  EpsDrawString( fp, 0.0, EpsXMarg, disp_height, disp_str );	  EpsDrawString( fp, 0.0, EpsXMarg, disp_height, disp_str );
+  2321	
+  2322	  /* number of injured */					  /* number of injured */
+  2323	  if((InjurySwitch==1)||(InjurySwitch==2)||(InjurySwitch==3))	  if((InjurySwitch==1)||(InjurySwitch==2)||(InjurySwitch==3))
+  2324	      disp_height -= 1.2*EpsInTH;				      disp_height -= 1.2*EpsInTH;
+  2325	      sprintf( disp_str, "Inj.: %d", NInjured );		      sprintf( disp_str, "Inj.: %d", NInjured );
+  2326	      EpsDrawString( fp, 0.0, EpsXMarg, disp_height, disp_str	      EpsDrawString( fp, 0.0, EpsXMarg, disp_height, disp_str
+  2327	  }      							  }      
+  2328	
+  2329	
+  2330	
+  2331	  /* 10 closing file */						  /* 10 closing file */
+  2332	  fflush(fp);							  fflush(fp);
+  2333	  fclose(fp);							  fclose(fp);
+  2334	  fprintf(stdout,"finished.\n");				  fprintf(stdout,"finished.\n");
+  2335	  Eps_iPF++;							  Eps_iPF++;
+  2336	
+  2337	  /* 11 creating copies of eps file */				  /* 11 creating copies of eps file */
+  2338	  if(EpsPicMult>1){						  if(EpsPicMult>1){
+  2339	    for(ii=1;ii<=EpsPicMult-1;ii++){				    for(ii=1;ii<=EpsPicMult-1;ii++){
+  2340	        sprintf(sh_com,"ln -s sd.%d.eps sd.%d.eps",Eps_iPF-1,	        sprintf(sh_com,"ln -s sd.%d.eps sd.%d.eps",Eps_iPF-1,
+  2341		fprintf(stdout,"%s\n",sh_com);					fprintf(stdout,"%s\n",sh_com);
+  2342		system(sh_com);							system(sh_com);
+  2343		_O("ok.\n");							_O("ok.\n");
+  2344	    }	 							    }	 
+  2345	    Eps_iPF+=EpsPicMult-1;					    Eps_iPF+=EpsPicMult-1;
+  2346	  }								  }
+  2347	}								}
+  2348	
+  2349	/*------------------------------*/				/*------------------------------*/
+  2350	
+  2351	void XDrawParticle( int i, int leftxmargin, int upymargin, fl	void XDrawParticle( int i, int leftxmargin, int upymargin, fl
+  2352	
+  2353	  /* - drawing the particle  */					  /* - drawing the particle  */
+  2354	
+  2355	  int lxm = leftxmargin, uym = upymargin;			  int lxm = leftxmargin, uym = upymargin;
+  2356	  float d,x,y;							  float d,x,y;
+  2357	
+  2358	
+  2359	
+  2360	  /* particle color */						  /* particle color */
+  2361	  switch(Injured[i]){						  switch(Injured[i]){
+  2362	  case 0: { XSetForeground( display, gc, PaCCode[0] ); break;	  case 0: { XSetForeground( display, gc, PaCCode[0] ); break;
+  2363	  case 1: { XSetForeground( display, gc, PaCCode[1] ); break;	  case 1: { XSetForeground( display, gc, PaCCode[1] ); break;
+  2364	  }								  }
+  2365	
+  2366	
+  2367	
+  2368	
+  2369	  /* drawing particle */					  /* drawing particle */
+  2370	  switch( Draw ) {						  switch( Draw ) {
+  2371	  default: case 0: {						  default: case 0: {
+  2372	
+  2373	          d = D[i];						          d = D[i];
+  2374		  x = X[i];							  x = X[i];
+  2375		  y = Y[i];							  y = Y[i];
+  2376	
+  2377	          XFillArc(display, pix1, gc, 				          XFillArc(display, pix1, gc, 
+  2378			   (int)floor(lxm + magn * (x - d/2)), 				   (int)floor(lxm + magn * (x - d/2)), 
+  2379			   (int)floor(uym + magn * (y - d/2)), 				   (int)floor(uym + magn * (y - d/2)), 
+  2380			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2381			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2382			   0, 23040							   0, 23040
+  2383			   );								   );
+  2384	
+  2385		  break;							  break;
+  2386	  }								  }
+  2387	  case 1: {							  case 1: {
+  2388	
+  2389	          d = D[i];						          d = D[i];
+  2390		  x = X[i];							  x = X[i];
+  2391		  y = Y[i];							  y = Y[i];
+  2392	
+  2393	          XFillArc(display, pix1, gc, 				          XFillArc(display, pix1, gc, 
+  2394			   (int)floor(lxm + magn * (x - d/2)), 				   (int)floor(lxm + magn * (x - d/2)), 
+  2395			   (int)floor(uym + magn * (y - d/2)), 				   (int)floor(uym + magn * (y - d/2)), 
+  2396			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2397			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2398			   0, 23040							   0, 23040
+  2399			   );								   );
+  2400	
+  2401		  XSetForeground( display, gc, ICCode );			  XSetForeground( display, gc, ICCode );
+  2402	          XDrawArc(display, pix1, gc, 				          XDrawArc(display, pix1, gc, 
+  2403			   (int)floor(lxm + magn * (x - d/2)), 				   (int)floor(lxm + magn * (x - d/2)), 
+  2404			   (int)floor(uym + magn * (y - d/2)), 				   (int)floor(uym + magn * (y - d/2)), 
+  2405			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2406			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2407			   0, 23040							   0, 23040
+  2408			   );								   );
+  2409	
+  2410		  break;							  break;
+  2411	  }								  }
+  2412	  case 2: {							  case 2: {
+  2413	
+  2414	          d = DrawDMult * D[i];					          d = DrawDMult * D[i];
+  2415		  x = X[i];							  x = X[i];
+  2416		  y = Y[i];							  y = Y[i];
+  2417	
+  2418	          XFillArc(display, pix1, gc, 				          XFillArc(display, pix1, gc, 
+  2419			   (int)floor(lxm + magn * (x - d/2)), 				   (int)floor(lxm + magn * (x - d/2)), 
+  2420			   (int)floor(uym + magn * (y - d/2)), 				   (int)floor(uym + magn * (y - d/2)), 
+  2421			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2422			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2423			   0, 23040							   0, 23040
+  2424			   );								   );
+  2425	
+  2426		  XSetForeground( display, gc, ICCode );			  XSetForeground( display, gc, ICCode );
+  2427	          XDrawArc(display, pix1, gc, 				          XDrawArc(display, pix1, gc, 
+  2428			   (int)floor(lxm + magn * (x - d/2)), 				   (int)floor(lxm + magn * (x - d/2)), 
+  2429			   (int)floor(uym + magn * (y - d/2)), 				   (int)floor(uym + magn * (y - d/2)), 
+  2430			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2431			   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2432			   0, 23040							   0, 23040
+  2433			   );								   );
+  2434	
+  2435		  break;							  break;
+  2436	  }								  }
+  2437	  case 3: {							  case 3: {
+  2438	
+  2439	          d = D[i];						          d = D[i];
+  2440		  x = X[i];							  x = X[i];
+  2441		  y = Y[i];							  y = Y[i];
+  2442	
+  2443		  if(sqrt(SQR(VX[i])+SQR(VY[i]))>=0.5){				  if(sqrt(SQR(VX[i])+SQR(VY[i]))>=0.5){
+  2444		          XFillArc(display, pix1, gc, 				          XFillArc(display, pix1, gc, 
+  2445				   (int)floor(lxm + magn * (x - d/2))				   (int)floor(lxm + magn * (x - d/2))
+  2446				   (int)floor(uym + magn * (y - d/2))				   (int)floor(uym + magn * (y - d/2))
+  2447				   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2448				   (int)floor(magn * d), 					   (int)floor(magn * d), 
+  2449				   0, 23040							   0, 23040
+  2450				   );								   );
+  2451		  }								  }
+  2452	
+  2453		  break;							  break;
+  2454	  }								  }
+  2455	  }								  }
+  2456	
+  2457	}								}
+  2458	
+  2459	/*-----------------------------------------------*/		/*-----------------------------------------------*/
+  2460	
+  2461	void Save_Demo(){						void Save_Demo(){
+  2462	
+  2463	  char sw[MY_STRLEN];						  char sw[MY_STRLEN];
+  2464	  float simtime_now,simtime_now_minus_1,e_now,e_now_minus_1,	  float simtime_now,simtime_now_minus_1,e_now,e_now_minus_1,
+  2465	    e_mean;							    e_mean;
+  2466	
+  2467	  if(  (UpdNum==0)						  if(  (UpdNum==0)
+  2468	     ||(  (UpdNum>0) 	 					     ||(  (UpdNum>0) 	 
+  2469	        &&(  (  (SaveUN != 0)					        &&(  (  (SaveUN != 0)
+  2470		      &&(UpdNum % SaveUN == 0)  				      &&(UpdNum % SaveUN == 0)  
+  2471		     )								     )
+  2472	           ||(  (SaveUN == 0)					           ||(  (SaveUN == 0)
+  2473		      &&(   floor( SimTime[UpdNum] / SaveST )			      &&(   floor( SimTime[UpdNum] / SaveST )
+  2474			  > floor( SimTime[UpdNum-1] / SaveST )				  > floor( SimTime[UpdNum-1] / SaveST )
+  2475		        )     							        )     
+  2476		      )								      )
+  2477		   )								   )
+  2478	       )							       )
+  2479	    ) { 							    ) { 
+  2480	
+  2481	
+  2482	          if(UpdNum>0){						          if(UpdNum>0){
+  2483		          if(SaveUN!=0){strcpy(sw,"un");}			          if(SaveUN!=0){strcpy(sw,"un");}
+  2484			  else /* ie. if(SaveUN==0) */ { strcpy(sw,"s			  else /* ie. if(SaveUN==0) */ { strcpy(sw,"s
+  2485			  e_mean=EMean(sw,SaveUN,SaveST);				  e_mean=EMean(sw,SaveUN,SaveST);
+  2486		  }								  }
+  2487		  else /* ie. if(UpdNum==0) */ { e_mean=1.0; }			  else /* ie. if(UpdNum==0) */ { e_mean=1.0; }
+  2488		  fprintf(OFP,"%d\t%g\t%d\t%g\n",				  fprintf(OFP,"%d\t%g\t%d\t%g\n",
+  2489			  UpdNum,SimTime[UpdNum],N,e_mean);				  UpdNum,SimTime[UpdNum],N,e_mean);
+  2490		  fflush(OFP); 							  fflush(OFP); 
+  2491	
+  2492	
+  2493	
+  2494		  /* closing present time window, opening new time wi		  /* closing present time window, opening new time wi
+  2495		  if(UpdNum>0){							  if(UpdNum>0){
+  2496	
+  2497		          simtime_now = SimTime[UpdNum];			          simtime_now = SimTime[UpdNum];
+  2498			  simtime_now_minus_1 = SimTime[UpdNum-1];			  simtime_now_minus_1 = SimTime[UpdNum-1];
+  2499			  e_now = E[UpdNum];						  e_now = E[UpdNum];
+  2500			  e_now_minus_1 = E[UpdNum-1];					  e_now_minus_1 = E[UpdNum-1];
+  2501	
+  2502			  free_vector(SimTime,Mb,Me);					  free_vector(SimTime,Mb,Me);
+  2503			  free_vector(E,Mb,Me);						  free_vector(E,Mb,Me);
+  2504	
+  2505			  Mb = UpdNum-1;						  Mb = UpdNum-1;
+  2506			  Me = UpdNum-1 + AyS-1;					  Me = UpdNum-1 + AyS-1;
+  2507			  SimTime = vector(Mb,Me);					  SimTime = vector(Mb,Me);
+  2508			  SimTime[UpdNum-1] = simtime_now_minus_1;			  SimTime[UpdNum-1] = simtime_now_minus_1;
+  2509			  SimTime[UpdNum] = simtime_now;				  SimTime[UpdNum] = simtime_now;
+  2510			  E = vector(Mb,Me);						  E = vector(Mb,Me);
+  2511			  E[UpdNum-1] = e_now_minus_1;					  E[UpdNum-1] = e_now_minus_1;
+  2512			  E[UpdNum] = e_now;						  E[UpdNum] = e_now;
+  2513		  }								  }
+  2514	  }								  }
+  2515	}								}
+  2516	
+  2517	/*------------------------------*/				/*------------------------------*/
+  2518	
+  2519	void Save_Java_in_Loop(){					void Save_Java_in_Loop(){
+  2520	
+  2521	  int i,intx,inty,intd,i_lastgood;				  int i,intx,inty,intd,i_lastgood;
+  2522	  float simtime_now,simtime_now_minus_1,e_now,e_now_minus_1,	  float simtime_now,simtime_now_minus_1,e_now,e_now_minus_1,
+  2523	    e_mean;							    e_mean;
+  2524	
+  2525	  if(  (JavaImInd<=JavaNTStep)					  if(  (JavaImInd<=JavaNTStep)
+  2526	     &&(  (UpdNum==0)						     &&(  (UpdNum==0)
+  2527	        ||(  (UpdNum>0) 	 				        ||(  (UpdNum>0) 	 
+  2528	           &&(   floor( SimTime[UpdNum] / JavaTStep )		           &&(   floor( SimTime[UpdNum] / JavaTStep )
+  2529		       > floor( SimTime[UpdNum-1] / JavaTStep )			       > floor( SimTime[UpdNum-1] / JavaTStep )
+  2530		     )								     )
+  2531	          )							          )
+  2532	       )							       )
+  2533	    ) { 							    ) { 
+  2534	
+  2535	          /* saving data */					          /* saving data */
+  2536	
+  2537	          /* meaningful values (ie. particles still on the bo	          /* meaningful values (ie. particles still on the bo
+  2538	          for(i=0;i<N;i++){					          for(i=0;i<N;i++){
+  2539		      intx=(int)floor(JavaXMarg+JavaMagn*X[i]);			      intx=(int)floor(JavaXMarg+JavaMagn*X[i]);
+  2540		      JavaXlo[i+1][JavaImInd]=intx%256;				      JavaXlo[i+1][JavaImInd]=intx%256;
+  2541		      JavaXhi[i+1][JavaImInd]=intx/256;				      JavaXhi[i+1][JavaImInd]=intx/256;
+  2542	
+  2543		      inty=(int)floor(JavaYMarg+JavaMagn*Y[i]);			      inty=(int)floor(JavaYMarg+JavaMagn*Y[i]);
+  2544		      JavaYlo[i+1][JavaImInd]=inty%256;				      JavaYlo[i+1][JavaImInd]=inty%256;
+  2545		      JavaYhi[i+1][JavaImInd]=inty/256;				      JavaYhi[i+1][JavaImInd]=inty/256;
+  2546	
+  2547		      JavaD[i+1][JavaImInd]=(int)floor(JavaMagn*D[i])		      JavaD[i+1][JavaImInd]=(int)floor(JavaMagn*D[i])
+  2548	
+  2549		      JavaC[i+1][JavaImInd]=Injured[i];				      JavaC[i+1][JavaImInd]=Injured[i];
+  2550		  }								  }
+  2551		  /* dummy values (for particles that have already le		  /* dummy values (for particles that have already le
+  2552		  i_lastgood=i-1;						  i_lastgood=i-1;
+  2553		  for(;i<N0;i++){						  for(;i<N0;i++){
+  2554		      JavaXlo[i+1][JavaImInd]=JavaXlo[i_lastgood+1][J		      JavaXlo[i+1][JavaImInd]=JavaXlo[i_lastgood+1][J
+  2555		      JavaXhi[i+1][JavaImInd]=JavaXhi[i_lastgood+1][J		      JavaXhi[i+1][JavaImInd]=JavaXhi[i_lastgood+1][J
+  2556		      JavaYlo[i+1][JavaImInd]=JavaYlo[i_lastgood+1][J		      JavaYlo[i+1][JavaImInd]=JavaYlo[i_lastgood+1][J
+  2557		      JavaYhi[i+1][JavaImInd]=JavaYhi[i_lastgood+1][J		      JavaYhi[i+1][JavaImInd]=JavaYhi[i_lastgood+1][J
+  2558	
+  2559		      JavaD[i+1][JavaImInd]=JavaD[i_lastgood+1][JavaI		      JavaD[i+1][JavaImInd]=JavaD[i_lastgood+1][JavaI
+  2560		      JavaC[i+1][JavaImInd]=JavaC[i_lastgood+1][JavaI		      JavaC[i+1][JavaImInd]=JavaC[i_lastgood+1][JavaI
+  2561		  }								  }
+  2562		  JavaImInd++;							  JavaImInd++;
+  2563	
+  2564	
+  2565	
+  2566		  /* closing present time window, opening new time wi		  /* closing present time window, opening new time wi
+  2567		  if(UpdNum>0){							  if(UpdNum>0){
+  2568	
+  2569		          simtime_now = SimTime[UpdNum];			          simtime_now = SimTime[UpdNum];
+  2570			  simtime_now_minus_1 = SimTime[UpdNum-1];			  simtime_now_minus_1 = SimTime[UpdNum-1];
+  2571			  e_now = E[UpdNum];						  e_now = E[UpdNum];
+  2572			  e_now_minus_1 = E[UpdNum-1];					  e_now_minus_1 = E[UpdNum-1];
+  2573	
+  2574			  free_vector(SimTime,Mb,Me);					  free_vector(SimTime,Mb,Me);
+  2575			  free_vector(E,Mb,Me);						  free_vector(E,Mb,Me);
+  2576	
+  2577			  Mb = UpdNum-1;						  Mb = UpdNum-1;
+  2578			  Me = UpdNum-1 + AyS-1;					  Me = UpdNum-1 + AyS-1;
+  2579			  SimTime = vector(Mb,Me);					  SimTime = vector(Mb,Me);
+  2580			  SimTime[UpdNum-1] = simtime_now_minus_1;			  SimTime[UpdNum-1] = simtime_now_minus_1;
+  2581			  SimTime[UpdNum] = simtime_now;				  SimTime[UpdNum] = simtime_now;
+  2582			  E = vector(Mb,Me);						  E = vector(Mb,Me);
+  2583			  E[UpdNum-1] = e_now_minus_1;					  E[UpdNum-1] = e_now_minus_1;
+  2584			  E[UpdNum] = e_now;						  E[UpdNum] = e_now;
+  2585		  }								  }
+  2586	  }								  }
+  2587	}								}
+  2588	
+  2589	/*------------------------------*/				/*------------------------------*/
+  2590	
+  2591	void Save_Java_after_Loop(){					void Save_Java_after_Loop(){
+  2592	  char c,fn[MY_STRLEN];						  char c,fn[MY_STRLEN];
+  2593	  FILE *fp;							  FILE *fp;
+  2594	  int i,t,intx1,inty1,intx2,inty2;				  int i,t,intx1,inty1,intx2,inty2;
+  2595	
+  2596	
+  2597	  /****************************************************		  /****************************************************
+  2598	   * DATA FILE FORMAT:						   * DATA FILE FORMAT:
+  2599	   *								   *
+  2600	   * byte order in a word: lo,hi				   * byte order in a word: lo,hi
+  2601	   *								   *
+  2602	   *								   *
+  2603	   * item                       symbol       size [bytes]  (2	   * item                       symbol       size [bytes]  (2
+  2604	   * ----------------------------------------------		   * ----------------------------------------------
+  2605	   * initial number of particles  				   * initial number of particles  
+  2606	   *                            N0           2			   *                            N0           2
+  2607	   * number of time steps       NTSTEP       2			   * number of time steps       NTSTEP       2
+  2608	   * time step [msec]           TSTEP        2			   * time step [msec]           TSTEP        2
+  2609	   * number of lines            NL           2			   * number of lines            NL           2
+  2610	   * number of boxes            NB           2			   * number of boxes            NB           2
+  2611	   * ---------------------------------				   * ---------------------------------
+  2612	   * particle coordinates,diameters,colors			   * particle coordinates,diameters,colors
+  2613	   * X[1][t=1],Y[1][t=1],D[1][t=1],C[1][t=1]...			   * X[1][t=1],Y[1][t=1],D[1][t=1],C[1][t=1]...
+  2614	   * ...X[1][t=NTSTEP],Y[1][NTSTEP],D[1][t=NTSTEP].C[1][NTSTE	   * ...X[1][t=NTSTEP],Y[1][NTSTEP],D[1][t=NTSTEP].C[1][NTSTE
+  2615	   * ...X[N][t=NTSTEP],Y[N][NTSTEP],D[N][t=NTSTEP],C[N][NTSTE	   * ...X[N][t=NTSTEP],Y[N][NTSTEP],D[N][t=NTSTEP],C[N][NTSTE
+  2616	   *                                         (2+2+1+1)*N*NTST	   *                                         (2+2+1+1)*N*NTST
+  2617	   * line coordinates (walls in this case)			   * line coordinates (walls in this case)
+  2618	   * X1(wall1),Y1(wall1),X2(wall1),Y2(wall1)...Y2(wallNW)	   * X1(wall1),Y1(wall1),X2(wall1),Y2(wall1)...Y2(wallNW)
+  2619	   *                                         8*NW		   *                                         8*NW
+  2620	   * coordinates of boxes (blanks in this case)			   * coordinates of boxes (blanks in this case)
+  2621	   * X1(blank1),Y1(blank1),X2(blank1),Y2(blank1)...Y2(blankNB	   * X1(blank1),Y1(blank1),X2(blank1),Y2(blank1)...Y2(blankNB
+  2622	   *                                         8*NB		   *                                         8*NB
+  2623	   * --------------------------------------------------		   * --------------------------------------------------
+  2624	   * extra switch               ES           1			   * extra switch               ES           1
+  2625	   *								   *
+  2626	   * switch(ES){						   * switch(ES){
+  2627	   * case 0: default: {						   * case 0: default: {
+  2628	   *      no further bytes 					   *      no further bytes 
+  2629	   * }								   * }
+  2630	   * case 1: (smoke) {						   * case 1: (smoke) {
+  2631	   *      v_smoke [milli pixel/timestep]      			   *      v_smoke [milli pixel/timestep]      
+  2632	   *                            VSMOKE       2			   *                            VSMOKE       2
+  2633	   *      t_smoke_start [timestep]  				   *      t_smoke_start [timestep]  
+  2634	   *                            TSMOKESTART  2			   *                            TSMOKESTART  2
+  2635	   * }								   * }
+  2636	   * case 4: there is a cylindrical column in the room {	   * case 4: there is a cylindrical column in the room {
+  2637	   *   COLUMN_CENTER_XLO,COLUMN_CENTER_XHI,  			   *   COLUMN_CENTER_XLO,COLUMN_CENTER_XHI,  
+  2638	   *   COLUMN_CENTER_YLO,COLUMN_CENTER_YHI,			   *   COLUMN_CENTER_YLO,COLUMN_CENTER_YHI,
+  2639	   *   COLUMN_CENTER_DLO,COLUMN_CENTER_DHI   6 			   *   COLUMN_CENTER_DLO,COLUMN_CENTER_DHI   6 
+  2640	   * }								   * }
+  2641	   * }								   * }
+  2642	   ****************************************/			   ****************************************/
+  2643	
+  2644	
+  2645	
+  2646	  /* init */							  /* init */
+  2647	  sprintf(fn,"sd.javadat");					  sprintf(fn,"sd.javadat");
+  2648	  fp=fopen(fn,"w");						  fp=fopen(fn,"w");
+  2649	  if(!fp){ 							  if(!fp){ 
+  2650	      fprintf(stderr,"ERROR: file %s could not be opened for 	      fprintf(stderr,"ERROR: file %s could not be opened for 
+  2651	      fprintf(stderr,"       exiting to system.\n");		      fprintf(stderr,"       exiting to system.\n");
+  2652	      exit(-1);							      exit(-1);
+  2653	  }								  }
+  2654	
+  2655	  /* parameters */						  /* parameters */
+  2656	  fprintf(fp,"%c%c",(char)(N0%256),(char)(N0/256));		  fprintf(fp,"%c%c",(char)(N0%256),(char)(N0/256));
+  2657	  fprintf(fp,"%c%c",(char)(JavaNTStep%256),(char)(JavaNTStep/	  fprintf(fp,"%c%c",(char)(JavaNTStep%256),(char)(JavaNTStep/
+  2658	  fprintf(fp,"%c%c",						  fprintf(fp,"%c%c",
+  2659		  (char)(((int)(floor(JavaTStep/0.001)))%256),			  (char)(((int)(floor(JavaTStep/0.001)))%256),
+  2660		  (char)(((int)(floor(JavaTStep/0.001)))/256)			  (char)(((int)(floor(JavaTStep/0.001)))/256)
+  2661		 );								 );
+  2662	  fprintf(fp,"%c%c",(char)(NW%256),(char)(NW/256));		  fprintf(fp,"%c%c",(char)(NW%256),(char)(NW/256));
+  2663	  fprintf(fp,"%c%c",(char)(5),(char)(0));			  fprintf(fp,"%c%c",(char)(5),(char)(0));
+  2664	
+  2665	  /* particle data */						  /* particle data */
+  2666	  for(i=1;i<=N0;i++){						  for(i=1;i<=N0;i++){
+  2667	      for(t=1;t<=JavaNTStep;t++){				      for(t=1;t<=JavaNTStep;t++){
+  2668		  fprintf(fp,"%c%c%c%c%c%c",					  fprintf(fp,"%c%c%c%c%c%c",
+  2669			  (char)(JavaXlo[i][t]),(char)(JavaXhi[i][t])			  (char)(JavaXlo[i][t]),(char)(JavaXhi[i][t])
+  2670			  (char)(JavaYlo[i][t]),(char)(JavaYhi[i][t])			  (char)(JavaYlo[i][t]),(char)(JavaYhi[i][t])
+  2671			  (char)(JavaD[i][t]),(char)(JavaC[i][t])			  (char)(JavaD[i][t]),(char)(JavaC[i][t])
+  2672			  );								  );
+  2673	      }								      }
+  2674	  }								  }
+  2675	  /* walls */							  /* walls */
+  2676	  for(i=0;i<NW;i++){						  for(i=0;i<NW;i++){
+  2677	      intx1=(int)floor(JavaXMarg+JavaMagn*W[i].x1);		      intx1=(int)floor(JavaXMarg+JavaMagn*W[i].x1);
+  2678	      inty1=(int)floor(JavaYMarg+JavaMagn*W[i].y1);		      inty1=(int)floor(JavaYMarg+JavaMagn*W[i].y1);
+  2679	      intx2=(int)floor(JavaXMarg+JavaMagn*W[i].x2);		      intx2=(int)floor(JavaXMarg+JavaMagn*W[i].x2);
+  2680	      inty2=(int)floor(JavaYMarg+JavaMagn*W[i].y2);		      inty2=(int)floor(JavaYMarg+JavaMagn*W[i].y2);
+  2681	      fprintf(fp,"%c%c%c%c%c%c%c%c",				      fprintf(fp,"%c%c%c%c%c%c%c%c",
+  2682		      (char)(intx1%256),(char)(intx1/256),			      (char)(intx1%256),(char)(intx1/256),
+  2683		      (char)(inty1%256),(char)(inty1/256),			      (char)(inty1%256),(char)(inty1/256),
+  2684		      (char)(intx2%256),(char)(intx2/256),			      (char)(intx2%256),(char)(intx2/256),
+  2685		      (char)(inty2%256),(char)(inty2/256)			      (char)(inty2%256),(char)(inty2/256)
+  2686		     );								     );
+  2687	  }								  }
+  2688	  /* 1st blank */						  /* 1st blank */
+  2689	  intx1=(int)floor(MAX(0.0,JavaXMarg+JavaMagn*(W[0].x1-0.6*(D	  intx1=(int)floor(MAX(0.0,JavaXMarg+JavaMagn*(W[0].x1-0.6*(D
+  2690	  inty1=(int)floor(MAX(0.0,JavaYMarg+JavaMagn*(W[0].y2-0.6*(D	  inty1=(int)floor(MAX(0.0,JavaYMarg+JavaMagn*(W[0].y2-0.6*(D
+  2691	  intx2=(int)floor(JavaXMarg+JavaMagn*W[0].x2);			  intx2=(int)floor(JavaXMarg+JavaMagn*W[0].x2);
+  2692	  inty2=(int)floor(JavaYMarg+JavaMagn*W[0].y1);			  inty2=(int)floor(JavaYMarg+JavaMagn*W[0].y1);
+  2693	  fprintf(fp,"%c%c%c%c%c%c%c%c",				  fprintf(fp,"%c%c%c%c%c%c%c%c",
+  2694		  (char)(intx1%256),(char)(intx1/256),				  (char)(intx1%256),(char)(intx1/256),
+  2695		  (char)(inty1%256),(char)(inty1/256),				  (char)(inty1%256),(char)(inty1/256),
+  2696		  (char)(intx2%256),(char)(intx2/256),				  (char)(intx2%256),(char)(intx2/256),
+  2697		  (char)(inty2%256),(char)(inty2/256)				  (char)(inty2%256),(char)(inty2/256)
+  2698		 );								 );
+  2699	  /* 2nd blank */						  /* 2nd blank */
+  2700	  intx1=(int)floor(JavaXMarg+JavaMagn*W[1].x1);			  intx1=(int)floor(JavaXMarg+JavaMagn*W[1].x1);
+  2701	  inty1=(int)floor(JavaYMarg+JavaMagn*W[1].y1);			  inty1=(int)floor(JavaYMarg+JavaMagn*W[1].y1);
+  2702	  intx2=(int)floor(JavaXMarg+JavaMagn*W[3].x1);			  intx2=(int)floor(JavaXMarg+JavaMagn*W[3].x1);
+  2703	  inty2=(int)floor(JavaYMarg+JavaMagn*W[3].y1);			  inty2=(int)floor(JavaYMarg+JavaMagn*W[3].y1);
+  2704	  fprintf(fp,"%c%c%c%c%c%c%c%c",				  fprintf(fp,"%c%c%c%c%c%c%c%c",
+  2705		  (char)(intx1%256),(char)(intx1/256),				  (char)(intx1%256),(char)(intx1/256),
+  2706		  (char)(inty1%256),(char)(inty1/256),				  (char)(inty1%256),(char)(inty1/256),
+  2707		  (char)(intx2%256),(char)(intx2/256),				  (char)(intx2%256),(char)(intx2/256),
+  2708		  (char)(inty2%256),(char)(inty2/256)				  (char)(inty2%256),(char)(inty2/256)
+  2709		 );								 );
+  2710	  /* 3rd blank */						  /* 3rd blank */
+  2711	  intx1=(int)floor(MAX(0.0,JavaXMarg+JavaMagn*(W[4].x2-0.6*(D	  intx1=(int)floor(MAX(0.0,JavaXMarg+JavaMagn*(W[4].x2-0.6*(D
+  2712	  inty1=(int)floor(JavaYMarg+JavaMagn*W[4].y2);			  inty1=(int)floor(JavaYMarg+JavaMagn*W[4].y2);
+  2713	  intx2=(int)floor(JavaXMarg+JavaMagn*W[4].x1);			  intx2=(int)floor(JavaXMarg+JavaMagn*W[4].x1);
+  2714	  inty2=(int)floor(MIN(JavaYS,JavaYMarg+JavaMagn*(W[4].y1+0.6	  inty2=(int)floor(MIN(JavaYS,JavaYMarg+JavaMagn*(W[4].y1+0.6
+  2715	  fprintf(fp,"%c%c%c%c%c%c%c%c",				  fprintf(fp,"%c%c%c%c%c%c%c%c",
+  2716		  (char)(intx1%256),(char)(intx1/256),				  (char)(intx1%256),(char)(intx1/256),
+  2717		  (char)(inty1%256),(char)(inty1/256),				  (char)(inty1%256),(char)(inty1/256),
+  2718		  (char)(intx2%256),(char)(intx2/256),				  (char)(intx2%256),(char)(intx2/256),
+  2719		  (char)(inty2%256),(char)(inty2/256)				  (char)(inty2%256),(char)(inty2/256)
+  2720		 );								 );
+  2721	  /* 4th blank */						  /* 4th blank */
+  2722	  intx1=(int)floor(JavaXMarg+JavaMagn*W[7].x1);			  intx1=(int)floor(JavaXMarg+JavaMagn*W[7].x1);
+  2723	  inty1=(int)floor(JavaYMarg+JavaMagn*W[7].y1);			  inty1=(int)floor(JavaYMarg+JavaMagn*W[7].y1);
+  2724	  intx2=(int)floor(JavaXMarg+JavaMagn*W[5].x1);			  intx2=(int)floor(JavaXMarg+JavaMagn*W[5].x1);
+  2725	  inty2=(int)floor(JavaYMarg+JavaMagn*W[5].y1);			  inty2=(int)floor(JavaYMarg+JavaMagn*W[5].y1);
+  2726	  fprintf(fp,"%c%c%c%c%c%c%c%c",				  fprintf(fp,"%c%c%c%c%c%c%c%c",
+  2727		  (char)(intx1%256),(char)(intx1/256),				  (char)(intx1%256),(char)(intx1/256),
+  2728		  (char)(inty1%256),(char)(inty1/256),				  (char)(inty1%256),(char)(inty1/256),
+  2729		  (char)(intx2%256),(char)(intx2/256),				  (char)(intx2%256),(char)(intx2/256),
+  2730		  (char)(inty2%256),(char)(inty2/256)				  (char)(inty2%256),(char)(inty2/256)
+  2731		 );								 );
+  2732	  /* 5th blank */						  /* 5th blank */
+  2733	  intx1=(int)floor(MAX(0.0,JavaXMarg+JavaMagn*(W[8].x2-0.6*(D	  intx1=(int)floor(MAX(0.0,JavaXMarg+JavaMagn*(W[8].x2-0.6*(D
+  2734	  inty1=(int)floor(JavaYMarg+JavaMagn*W[8].y2);			  inty1=(int)floor(JavaYMarg+JavaMagn*W[8].y2);
+  2735	  intx2=(int)floor(JavaXMarg+JavaMagn*W[8].x1);			  intx2=(int)floor(JavaXMarg+JavaMagn*W[8].x1);
+  2736	  inty2=(int)floor(JavaYMarg+JavaMagn*W[8].y1);			  inty2=(int)floor(JavaYMarg+JavaMagn*W[8].y1);
+  2737	  fprintf(fp,"%c%c%c%c%c%c%c%c",				  fprintf(fp,"%c%c%c%c%c%c%c%c",
+  2738		  (char)(intx1%256),(char)(intx1/256),				  (char)(intx1%256),(char)(intx1/256),
+  2739		  (char)(inty1%256),(char)(inty1/256),				  (char)(inty1%256),(char)(inty1/256),
+  2740		  (char)(intx2%256),(char)(intx2/256),				  (char)(intx2%256),(char)(intx2/256),
+  2741		  (char)(inty2%256),(char)(inty2/256)				  (char)(inty2%256),(char)(inty2/256)
+  2742		 );								 );
+  2743	
+  2744	
+  2745	
+  2746	
+  2747	
+  2748	  /* extra switch */						  /* extra switch */
+  2749	  switch(InjurySwitch){						  switch(InjurySwitch){
+  2750	  case 0: case 1: default: {					  case 0: case 1: default: {
+  2751	      switch(ColumnSwitch){					      switch(ColumnSwitch){
+  2752	      default: case 0: {					      default: case 0: {
+  2753		      fprintf(fp,"%c",(char)(0)); 				      fprintf(fp,"%c",(char)(0)); 
+  2754		      break;							      break;
+  2755	      }								      }
+  2756	      case 1:{							      case 1:{
+  2757		      fprintf(fp,"%c",(char)(4)); 				      fprintf(fp,"%c",(char)(4)); 
+  2758		      fprintf(fp,"%c%c%c%c%c%c",				      fprintf(fp,"%c%c%c%c%c%c",
+  2759			    (char)(((int)floor(JavaXMarg+JavaMagn*Col			    (char)(((int)floor(JavaXMarg+JavaMagn*Col
+  2760			    (char)(((int)floor(JavaXMarg+JavaMagn*Col			    (char)(((int)floor(JavaXMarg+JavaMagn*Col
+  2761			    (char)(((int)floor(JavaYMarg+JavaMagn*Col			    (char)(((int)floor(JavaYMarg+JavaMagn*Col
+  2762			    (char)(((int)floor(JavaYMarg+JavaMagn*Col			    (char)(((int)floor(JavaYMarg+JavaMagn*Col
+  2763			    (char)(((int)floor(JavaMagn*ColumnD))%256			    (char)(((int)floor(JavaMagn*ColumnD))%256
+  2764			    (char)(((int)floor(JavaMagn*ColumnD))/256			    (char)(((int)floor(JavaMagn*ColumnD))/256
+  2765			      );							      );
+  2766		      break;							      break;
+  2767	      }								      }
+  2768	      break;							      break;
+  2769	      }								      }
+  2770	  }								  }
+  2771	  case 2: case 3:{						  case 2: case 3:{
+  2772	      fprintf(fp,"%c",(char)(1)); 				      fprintf(fp,"%c",(char)(1)); 
+  2773	      fprintf(fp,"%c%c",					      fprintf(fp,"%c%c",
+  2774		      (char)(((int)floor(1000.0*JavaMagn*VSmoke*JavaT		      (char)(((int)floor(1000.0*JavaMagn*VSmoke*JavaT
+  2775		      (char)(((int)floor(1000.0*JavaMagn*VSmoke*JavaT		      (char)(((int)floor(1000.0*JavaMagn*VSmoke*JavaT
+  2776		     );								     );
+  2777	      fprintf(fp,"%c%c",					      fprintf(fp,"%c%c",
+  2778		      (char)(((int)floor(SmokeStartTime/JavaTStep))%2		      (char)(((int)floor(SmokeStartTime/JavaTStep))%2
+  2779		      (char)(((int)floor(SmokeStartTime/JavaTStep))/2		      (char)(((int)floor(SmokeStartTime/JavaTStep))/2
+  2780		     );								     );
+  2781	      break;							      break;
+  2782	  }								  }
+  2783	  }								  }
+  2784	}								}
+  2785	
+  2786	/*------------------------------*/				/*------------------------------*/
+  2787	
+  2788	void Shutdown_Demo(){}						void Shutdown_Demo(){}
+  2789	
+  2790	/*------------------------------*/				/*------------------------------*/
+  2791	
+  2792	void ReInit(){							void ReInit(){
+  2793	  /* if parameter file has changed, re-read  */			  /* if parameter file has changed, re-read  */
+  2794	
+  2795	  stat(IFN, &IFStatBuf);					  stat(IFN, &IFStatBuf);
+  2796	  if( IFStatBuf.st_mtime != IFModTime ) { 			  if( IFStatBuf.st_mtime != IFModTime ) { 
+  2797	          IFModTime = IFStatBuf.st_mtime;			          IFModTime = IFStatBuf.st_mtime;
+  2798		  readpar ( "re", IFN, IPar, IParName, IParNum, 		  readpar ( "re", IFN, IPar, IParName, IParNum, 
+  2799			     FPar, FParName, FParNum, 					     FPar, FParName, FParNum, 
+  2800			     SPar, SParName, SParNum ); 				     SPar, SParName, SParNum ); 
+  2801	  }								  }
+  2802	}								}
+  2803	
+  2804	/*******************************/				/*******************************/
+  2805	#endif /* _FLAG_SD_C_ */					#endif /* _FLAG_SD_C_ */
+  2806	/*******************************/				/*******************************/
+  2807	
+  2808	/*========================================*/			/*========================================*/
+  2809	
+  2810	/*******************************/				/*******************************/
+  2811	#ifdef _FLAG_SD_CRUNCH_C_					#ifdef _FLAG_SD_CRUNCH_C_
+  2812	/*******************************/				/*******************************/
+  2813	
+  2814	void Start_Crunch( int narg, char *argstr[] ){			void Start_Crunch( int narg, char *argstr[] ){
+  2815	
+  2816	  RndSeed_main_1st = RndSeed;					  RndSeed_main_1st = RndSeed;
+  2817	  /* ! this may change in 'Start_Bare' */			  /* ! this may change in 'Start_Bare' */
+  2818	
+  2819	
+  2820	  /* standard start */						  /* standard start */
+  2821	  Start_Bare( narg, argstr );					  Start_Bare( narg, argstr );
+  2822	}								}
+  2823	
+  2824	/*--------------------------------------------------*/		/*--------------------------------------------------*/
+  2825	
+  2826	void Init_Crunch(){						void Init_Crunch(){
+  2827	
+  2828	  _E("Initializing, please wait... \n"); 			  _E("Initializing, please wait... \n"); 
+  2829	  Init_Bare("crunch");						  Init_Bare("crunch");
+  2830	
+  2831	  _E("... finished.\n");					  _E("... finished.\n");
+  2832	}								}
+  2833	
+  2834	/*------------------------------*/				/*------------------------------*/
+  2835	
+  2836	void Save_Crunch_InLoop(){					void Save_Crunch_InLoop(){
+  2837	
+  2838	  char sw[MY_STRLEN];						  char sw[MY_STRLEN];
+  2839	  float simtime_now,simtime_now_minus_1,			  float simtime_now,simtime_now_minus_1,
+  2840	    e_now,e_now_minus_1,e_mean;					    e_now,e_now_minus_1,e_mean;
+  2841	
+  2842	  if(  (UpdNum==0)						  if(  (UpdNum==0)
+  2843	     ||(  (UpdNum>0) 	 					     ||(  (UpdNum>0) 	 
+  2844	        &&(  (  (SaveUN != 0)					        &&(  (  (SaveUN != 0)
+  2845		      &&(UpdNum % SaveUN == 0)  				      &&(UpdNum % SaveUN == 0)  
+  2846		     )								     )
+  2847	           ||(  (SaveUN == 0)					           ||(  (SaveUN == 0)
+  2848		      &&(   floor( SimTime[UpdNum] / SaveST )			      &&(   floor( SimTime[UpdNum] / SaveST )
+  2849			  > floor( SimTime[UpdNum-1] / SaveST )				  > floor( SimTime[UpdNum-1] / SaveST )
+  2850		        )     							        )     
+  2851		      )								      )
+  2852		   )								   )
+  2853	       )							       )
+  2854	    ) { 							    ) { 
+  2855	
+  2856	          if(UpdNum>0){						          if(UpdNum>0){
+  2857		          if(SaveUN!=0){strcpy(sw,"un");}			          if(SaveUN!=0){strcpy(sw,"un");}
+  2858			  else{ strcpy(sw,"st"); }					  else{ strcpy(sw,"st"); }
+  2859			  e_mean=EMean(sw,SaveUN,SaveST);				  e_mean=EMean(sw,SaveUN,SaveST);
+  2860		  }								  }
+  2861		  else{ e_mean=1.0; }						  else{ e_mean=1.0; }
+  2862	
+  2863		  /*								  /*
+  2864		    fprintf(stdout,"%d\t%g\t%d\t%g\n",				    fprintf(stdout,"%d\t%g\t%d\t%g\n",
+  2865			  UpdNum,SimTime[UpdNum],N,e_mean);				  UpdNum,SimTime[UpdNum],N,e_mean);
+  2866		  fflush(stdout); 						  fflush(stdout); 
+  2867		  */								  */
+  2868	
+  2869	
+  2870		  /* closing present time window, opening new time wi		  /* closing present time window, opening new time wi
+  2871		  if(UpdNum>0){							  if(UpdNum>0){
+  2872	
+  2873		          simtime_now = SimTime[UpdNum];			          simtime_now = SimTime[UpdNum];
+  2874			  simtime_now_minus_1 = SimTime[UpdNum-1];			  simtime_now_minus_1 = SimTime[UpdNum-1];
+  2875			  e_now = E[UpdNum];						  e_now = E[UpdNum];
+  2876			  e_now_minus_1 = E[UpdNum-1];					  e_now_minus_1 = E[UpdNum-1];
+  2877	
+  2878			  free_vector(SimTime,Mb,Me);					  free_vector(SimTime,Mb,Me);
+  2879			  free_vector(E,Mb,Me);						  free_vector(E,Mb,Me);
+  2880	
+  2881			  Mb = UpdNum-1;						  Mb = UpdNum-1;
+  2882			  Me = UpdNum-1 + AyS-1;					  Me = UpdNum-1 + AyS-1;
+  2883			  SimTime = vector(Mb,Me);					  SimTime = vector(Mb,Me);
+  2884			  SimTime[UpdNum-1] = simtime_now_minus_1;			  SimTime[UpdNum-1] = simtime_now_minus_1;
+  2885			  SimTime[UpdNum] = simtime_now;				  SimTime[UpdNum] = simtime_now;
+  2886			  E = vector(Mb,Me);						  E = vector(Mb,Me);
+  2887			  E[UpdNum-1] = e_now_minus_1;					  E[UpdNum-1] = e_now_minus_1;
+  2888			  E[UpdNum] = e_now;						  E[UpdNum] = e_now;
+  2889		  }								  }
+  2890	  }								  }
+  2891	}								}
+  2892	
+  2893	/*------------------------------*/				/*------------------------------*/
+  2894	
+  2895	void Save_Crunch_AfterLoop(){					void Save_Crunch_AfterLoop(){
+  2896	
+  2897	  char fn[MY_STRLEN];						  char fn[MY_STRLEN];
+  2898	  FILE *fp;							  FILE *fp;
+  2899	  int i;							  int i;
+  2900	
+  2901	
+  2902	  /* 1 */							  /* 1 */
+  2903	  /* ALL CASES: saving leaving times */				  /* ALL CASES: saving leaving times */
+  2904	  sprintf(fn,"%s_RndSeed=%d_VSmoke=%g_N0=%d_",OFN,RndSeed,VSm	  sprintf(fn,"%s_RndSeed=%d_VSmoke=%g_N0=%d_",OFN,RndSeed,VSm
+  2905	  if(!(fp=fopen(fn,"w"))){					  if(!(fp=fopen(fn,"w"))){
+  2906	      fprintf(stderr,"sd_lib.c: Couldn't open %s for writing.	      fprintf(stderr,"sd_lib.c: Couldn't open %s for writing.
+  2907	      SD_LIB_EXIT;						      SD_LIB_EXIT;
+  2908	  }								  }
+  2909	  fprintf(fp,"#index\tleaving time\n\n");			  fprintf(fp,"#index\tleaving time\n\n");
+  2910	  for(i=0;i<N0;i++){						  for(i=0;i<N0;i++){
+  2911	      fprintf(fp,"%d\t%g\n",					      fprintf(fp,"%d\t%g\n",
+  2912		      i,Tleave[RndSeed_main_index][VSmoke_main_index]		      i,Tleave[RndSeed_main_index][VSmoke_main_index]
+  2913	  }								  }
+  2914	  fflush(fp);							  fflush(fp);
+  2915	  fclose(fp);							  fclose(fp);
+  2916	
+  2917	
+  2918	  /* 1b SB */ 						      <
+  2919	  /* ALL CASES: saving trajectory data  */		      <
+  2920	  sprintf(fn,"%s_RndSeed=%d_N0=%d_",OF3N,RndSeed,N0);	      <
+  2921	  if(!(fp=fopen(fn,"w"))){				      <
+  2922	      fprintf(stderr,"sd_lib.c: Couldn't open %s for writing. <
+  2923	      SD_LIB_EXIT;					      <
+  2924	  }							      <
+  2925	  fprintf(fp,"#time\tid\tx\ty\n\n");			      <
+  2926	  for(i=0;i<N0;i++){					      <
+  2927		fprintf(fp,"%g\t%d\t%f\t%f\n",			      <
+  2928	                  SimTime[UpdNum], IDs[i],X[i],Y[i]);	      <
+  2929	  }							      <
+  2930	  fflush(fp);						      <
+  2931	  fclose(fp);						      <
+  2932								      <
+  2933								      <
+  2934								      <
+  2935	  switch(InjurySwitch){						  switch(InjurySwitch){
+  2936	  case 0: { break; }						  case 0: { break; }
+  2937	  case 1: case 2: case 3: {					  case 1: case 2: case 3: {
+  2938	
+  2939	      /* case 1: people crushed */				      /* case 1: people crushed */
+  2940	      /* case 2, case 3: smoke */				      /* case 2, case 3: smoke */
+  2941	
+  2942	      /* saving injury data */					      /* saving injury data */
+  2943	      sprintf(fn,"%s_RndSeed=%d_VSmoke=%g_N0=%d_",OF2N,RndSee	      sprintf(fn,"%s_RndSeed=%d_VSmoke=%g_N0=%d_",OF2N,RndSee
+  2944	      if(!(fp=fopen(fn,"w"))){					      if(!(fp=fopen(fn,"w"))){
+  2945		  fprintf(stderr,"sd_lib.c: Couldn't open %s for writ		  fprintf(stderr,"sd_lib.c: Couldn't open %s for writ
+  2946		  SD_LIB_EXIT;							  SD_LIB_EXIT;
+  2947	      }								      }
+  2948	      fprintf(fp,"# N pedestrians remained in the room until 	      fprintf(fp,"# N pedestrians remained in the room until 
+  2949	      fprintf(fp,"# %d\t%g\n",N,SimTime[UpdNum]);		      fprintf(fp,"# %d\t%g\n",N,SimTime[UpdNum]);
+  2950	      fprintf(fp,"\n");						      fprintf(fp,"\n");
+  2951	      fprintf(fp,"# index\tinjured?\tx\ty\td\n");		      fprintf(fp,"# index\tinjured?\tx\ty\td\n");
+  2952	      fprintf(fp,"\n");						      fprintf(fp,"\n");
+  2953	      for(i=0;i<N;i++){						      for(i=0;i<N;i++){
+  2954		  fprintf(fp,"%d\t%d\t%.4f\t%.4f\t%.4f\n",			  fprintf(fp,"%d\t%d\t%.4f\t%.4f\t%.4f\n",
+  2955			  i,Injured[i],X[i],Y[i],D[i]					  i,Injured[i],X[i],Y[i],D[i]
+  2956			 );								 );
+  2957	      }								      }
+  2958	      fflush(fp);						      fflush(fp);
+  2959	      fclose(fp);						      fclose(fp);
+  2960	
+  2961	      break;							      break;
+  2962	  }								  }
+  2963	  }								  }
+  2964	}								}
+  2965	
+  2966	/*------------------------------*/				/*------------------------------*/
+  2967	
+  2968	void Clean_Crunch_AfterLoop(){					void Clean_Crunch_AfterLoop(){
+  2969	
+  2970	  free_vector(SimTime,Mb,Me);					  free_vector(SimTime,Mb,Me);
+  2971	  free_ivector(BIndBd, 0, SQR(G)-1 );				  free_ivector(BIndBd, 0, SQR(G)-1 );
+  2972	  free_ivector(BInd, 0, N0-1 );					  free_ivector(BInd, 0, N0-1 );
+  2973	  free_vector(D, 0, N0-1 );					  free_vector(D, 0, N0-1 );
+  2974	  free_vector(Phi, 0, N0-1 );					  free_vector(Phi, 0, N0-1 );
+  2975	  free_vector(X, 0, N0-1 );					  free_vector(X, 0, N0-1 );
+  2976	  free_vector(Y, 0, N0-1 );					  free_vector(Y, 0, N0-1 );
+  2977	  free_vector(Xprev, 0, N0-1 );					  free_vector(Xprev, 0, N0-1 );
+  2978	  free_vector(Yprev, 0, N0-1 );					  free_vector(Yprev, 0, N0-1 );
+  2979	  free_vector(V, 0, N0-1 );					  free_vector(V, 0, N0-1 );
+  2980	  free_vector(VX, 0, N0-1 );					  free_vector(VX, 0, N0-1 );
+  2981	  free_vector(VY, 0, N0-1 );					  free_vector(VY, 0, N0-1 );
+  2982	  free_vector(E, Mb, Me );					  free_vector(E, Mb, Me );
+  2983	  free_vector(Vdir,0,N0-1);					  free_vector(Vdir,0,N0-1);
+  2984	  free_vector(V0of,0,N0-1);					  free_vector(V0of,0,N0-1);
+  2985	  free_ivector(Injured,0,N0-1);  				  free_ivector(Injured,0,N0-1);  
+  2986	  free_ivector(IDs,0,N0-1);  //SB			      <
+  2987	}								}
+  2988	
+  2989	/*------------------------------*/				/*------------------------------*/
+  2990	
+  2991	void Save_Crunch_AtEnd(){}					void Save_Crunch_AtEnd(){}
+  2992	
+  2993	/*******************************/				/*******************************/
+  2994	#endif /* _FLAG_SD_CRUNCH_C_ */					#endif /* _FLAG_SD_CRUNCH_C_ */
+  2995	/*******************************/				/*******************************/
