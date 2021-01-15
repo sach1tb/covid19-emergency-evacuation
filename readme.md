@@ -25,3 +25,6 @@ This script has the following functions each of which point to the data in the d
 
 1. Butail S and Porfiri M (2021) The Effect of An Emergency Evacuation on the Spread of COVID19.  *Front. Phys.* 8:631264. 
 2. Helbing D, Farkas I, Vicsek T. Simulating dynamical features of escape panic. *Nature* (2000) 407:487–90. http://angel.elte.hu/panic/
+
+## Resources
+1. Violinplot.m and violin.m are from https://github.com/bastibe/Violinplot-Matlab
